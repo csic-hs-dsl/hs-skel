@@ -4,11 +4,14 @@ module Control.Parallel.HsSkel.Examples
 where
 
 import Control.Arrow
+import Control.Category (id, (.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
 
 import Data.Numbers.Primes (isPrime)
 import Data.List (transpose)
+
+import Prelude hiding (mapM, id, (.))
 
 
 testSize :: Integer
@@ -64,7 +67,7 @@ ejSNdo = proc (x, y) -> do
     x' <- skPar (skSeq (** float 2)) -< x
     y' <- skPar (skSeq (+ float 5)) -< y
     fpair <- skPairF -< (x', y')
-    fres <- skMapF (uncurry (+)) -< fpair
+    fres <- skMapF (skSeq $ uncurry (+)) -< fpair
     res <- skSync -< fres
     returnA -<  res
     --x'' <- SkSync -< x'
@@ -137,3 +140,4 @@ skVecProdChunk = proc (vA, vB) -> do
         st1 = stChunk (stFromList pairs) 1000000
         st2 = stMap st1 (skSeq $ map (uncurry (*)))
     skRed st2 (skSeq $ (\(o, l) -> o + (sum l))) -<< 0
+
