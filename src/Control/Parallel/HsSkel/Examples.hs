@@ -41,7 +41,7 @@ fibPrimesConsSk = skPar $ skSeq (\(i, fi) -> (i, isPrime fi))
 fibPrimesRedSk :: Skel ([Integer], (Integer, Bool)) [Integer]
 fibPrimesRedSk = skSeq reducer
 
---reducer :: forall a. ([a], (a, Bool)) -> [a]
+reducer :: ([a], (a, Bool)) -> [a]
 reducer (l, (_, False)) = l
 reducer (l, (p, True)) = p:l
 
@@ -50,7 +50,7 @@ generator n (i, f1, f2) = if i < n
                 then Just ((i, f1+f2), (i+1, f1+f2, f1))
                 else Nothing
 
-
+main :: IO ()
 main = do
     print "inicio"
     --res <- exec ejSN (1,2)
@@ -71,10 +71,13 @@ main = do
     print "fin"
     print res
 
+float :: Float -> Float
 float = id :: Float -> Float
 
+ejSN :: Skel (Float, Float) Float
 ejSN = (skSeq (uncurry (+))) . (skSync *** skSync) . (skPar (skSeq (** float 2)) *** skPar (skSeq (+ float 5)))
 
+ejSNdo :: Skel (Float, Float) Float
 ejSNdo = proc (x, y) -> do
     x' <- skPar (skSeq (** float 2)) -< x
     y' <- skPar (skSeq (+ float 5)) -< y
@@ -86,8 +89,10 @@ ejSNdo = proc (x, y) -> do
     --y'' <- SkSync -< y'
     --returnA -<  x'' + y''
 
+swap :: (t1 -> t2 -> t) -> t2 -> t1 -> t
 swap f a b = f b a
 
+ej5do :: Skel [Integer] [Integer]
 ej5do = proc x -> do
     ret <- skRed (stMap (stMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk -< x
     returnA -< ret
@@ -119,6 +124,7 @@ skMatProd = proc (mA, mB) -> do
                ((a:l):ls, len + 1)
             else
                 ([a]:(l:ls), 1)
+        magic (([], _), _) = undefined -- no debería pasar?
     algo <- skRed resStream (skSeq magic) -<< ([[]], 0)
     returnA -< reverse $ map reverse $ fst algo
 
