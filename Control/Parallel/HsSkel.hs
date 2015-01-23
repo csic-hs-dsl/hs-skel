@@ -1,12 +1,30 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Arrows #-}
 
-module Control.Parallel.HsSkel 
-where
+module Control.Parallel.HsSkel (
+    -- Types:
+    Future(),
+    Skel(),
+    Stream(),
+    -- Constructors:
+    skSeq,
+    skPar,
+    skSync,
+    skComp,
+    skMap,
+    skRed,
+    stFromList,
+    -- Utils:
+    skConst,
+    skMapF,
+    skPairF,
+    skTraverseF,
+    skDaC
+) where
 
 import Data.Traversable (Traversable)
-import Control.Arrow
-import Control.Category
+import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right, (+++)), ArrowApply(app), returnA)
+import Control.Category (Category, id, (.))
 import Control.Concurrent.MVar (MVar)
 import Control.DeepSeq (NFData, rnf)
 import Control.Monad hiding (mapM)
