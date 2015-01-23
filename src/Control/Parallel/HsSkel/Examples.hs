@@ -13,12 +13,12 @@ ej1 = exec (skSeq (**(2 :: Float)) . skSeq (const 5)) ()
 
 ej2 = exec (skSeq (**(2 :: Float)) . skSync . (skPar $ skSeq $ const 5)) ()
 
-ej4 = exec (skRed (StMap (StGen (generator testSize) (1, 1, 0)) (skSeq (\(i, fi) -> (i, isPrime fi)))) (skSeq (reducer))) ([] :: [Integer])
+ej4 = exec (skRed (stMap (stGen (generator testSize) (1, 1, 0)) (skSeq (\(i, fi) -> (i, isPrime fi)))) (skSeq (reducer))) ([] :: [Integer])
 
 ej5 = exec fibPrimesSk ([] :: [Integer])
 
-fibPrimesSk = skRed (StMap (StMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk
-fibPrimesGenSk = StGen (generator testSize) (1, 1, 0)
+fibPrimesSk = skRed (stMap (stMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk
+fibPrimesGenSk = stGen (generator testSize) (1, 1, 0)
 fibPrimesConsSk = skPar $ skSeq (\(i, fi) -> (i, isPrime fi))
 fibPrimesRedSk = skSeq reducer
 
@@ -69,14 +69,14 @@ ejSNdo = proc (x, y) -> do
 swap f a b = f b a
 
 ej5do = proc x -> do
-    ret <- skRed (StMap (StMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk -< x
+    ret <- skRed (stMap (stMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk -< x
     returnA -< ret
 
 
 skVecProdChunkCaca :: Skel ([Double], [Double]) Double
 skVecProdChunkCaca = proc (vA, vB) -> do
-    let gen = StChunk (StMap (stFromList [0 .. length vA - 1]) (skSeq $ \i -> vA !! i * vB !! i)) 10000
-    let gen2 = StMap gen $ skSeq sum
+    let gen = stChunk (stMap (stFromList [0 .. length vA - 1]) (skSeq $ \i -> vA !! i * vB !! i)) 10000
+    let gen2 = stMap gen $ skSeq sum
     skRed gen2 (skSeq $ uncurry (+)) -<< 0
 
 
@@ -84,7 +84,7 @@ skVecProd :: Skel ([Double], [Double]) Double
 skVecProd = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
         st1 = stFromList pairs
-        st2 = StMap st1 (skSeq $ uncurry (*))
+        st2 = stMap st1 (skSeq $ uncurry (*))
     skRed st2 (skSeq $ uncurry (+)) -<< 0
 
 
@@ -122,13 +122,13 @@ skParSimple = proc (a) -> do
 
 skMapSimple :: Skel [Integer] [Integer]
 skMapSimple = proc st0 -> do
-    let st1 = StMap (stFromList st0) (skPar $ skSeq doNothing)
-        st2 = StMap st1 skSync
+    let st1 = stMap (stFromList st0) (skPar $ skSeq doNothing)
+        st2 = stMap st1 skSync
     skRed st2 (skSeq (\(o, i) -> i:o)) -<< []
 
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = StChunk (stFromList pairs) 1000000
-        st2 = StMap st1 (skSeq $ map (uncurry (*)))
+        st1 = stChunk (stFromList pairs) 1000000
+        st2 = stMap st1 (skSeq $ map (uncurry (*)))
     skRed st2 (skSeq $ (\(o, l) -> o + (sum l))) -<< 0
