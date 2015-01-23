@@ -17,17 +17,16 @@ import Prelude hiding (mapM, id, (.))
 testSize :: Integer
 testSize = 10000
 
-ej1 :: IO Float
-ej1 = exec (skSeq (**(2 :: Float)) . skSeq (const 5)) ()
+mainTemplate :: (Show a) => IO a -> IO ()
+mainTemplate code = do
+    print "Inicio"
+    res <- code
+    print "Fin"
+    print res
 
-ej2 :: IO Float
-ej2 = exec (skSeq (**(2 :: Float)) . skSync . (skPar $ skSeq $ const 5)) ()
+ej4 = mainTemplate $ exec (skRed (stMap (stGen (generator testSize) (1, 1, 0)) (skSeq (\(i, fi) -> (i, isPrime fi)))) (skSeq (reducer))) ([] :: [Integer])
 
-ej4 :: IO [Integer]
-ej4 = exec (skRed (stMap (stGen (generator testSize) (1, 1, 0)) (skSeq (\(i, fi) -> (i, isPrime fi)))) (skSeq (reducer))) ([] :: [Integer])
-
-ej5 :: IO [Integer]
-ej5 = exec fibPrimesSk ([] :: [Integer])
+ej5 = mainTemplate $ exec fibPrimesSk ([] :: [Integer])
 
 fibPrimesSk :: Skel [Integer] [Integer]
 fibPrimesSk = skRed (stMap (stMap fibPrimesGenSk fibPrimesConsSk) skSync) fibPrimesRedSk
