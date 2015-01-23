@@ -27,7 +27,6 @@ import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right,
 import Control.Category (Category, id, (.))
 import Control.Concurrent.MVar (MVar)
 import Control.DeepSeq (NFData, rnf)
-import Control.Monad hiding (mapM)
 import Prelude hiding (mapM, id, (.))
 
 {- ================================================================== -}
@@ -139,9 +138,10 @@ skTraverseF = skPar $ skMap skSync
 
 skDaC :: (Traversable t) => Skel i o -> (i -> Bool) -> (i -> t i) -> (i -> t o -> o) -> Skel i o
 skDaC skel isTrivial split combine = proc i -> do
-    if (isTrivial i) then
-        skel -< i
-    else do
-        oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
-        returnA -< combine i oSplit
+    if (isTrivial i) 
+        then
+            skel -< i
+        else do
+            oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
+            returnA -< combine i oSplit
 
