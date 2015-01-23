@@ -5,6 +5,11 @@ where
 
 import Control.Arrow
 import Control.Parallel.HsSkel
+import Control.Parallel.HsSkel.Exec
+
+import Data.Numbers.Primes (isPrime)
+import Data.List (transpose)
+
 
 testSize :: Integer
 testSize = 10000
