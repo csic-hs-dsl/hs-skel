@@ -66,6 +66,7 @@ data Stream d where
     StMap :: Stream i -> Skel i o -> Stream o
     StChunk :: Stream i -> Integer -> Stream [i]
 
+
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
 {- ================================================================== -}
@@ -89,6 +90,7 @@ instance ArrowChoice Skel where
 
 instance ArrowApply Skel where
     app = SkApply
+
 
 {- ================================================================== -}
 {- ======================= Smart Constructors ======================= -}
@@ -118,6 +120,7 @@ stFromList l = StGen go l
         go [] = Nothing
         go (x:xs) = Just (x, xs)
 
+
 {- ================================================================== -}
 {- ========================= Util Functions ========================= -}
 {- ================================================================== -}
@@ -141,3 +144,4 @@ skDaC skel isTrivial split combine = proc i -> do
     else do
         oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
         returnA -< combine i oSplit
+
