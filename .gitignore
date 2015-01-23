@@ -1,9 +1,9 @@
-
-*.h
-
-*.o
-
 *.hi
 
+dist/setup-config
 dist/
 
+dist/package.conf.inplace
+
+dist/build/autogen/Paths_hs_skel.hs
+*.o
