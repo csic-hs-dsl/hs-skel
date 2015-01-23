@@ -16,10 +16,11 @@ copyright:      Universidad de la República, Uruguay
 
 library
   hs-source-dirs:  src
-  build-depends:   base >= 4 && < 5, stm, deepseq
+  build-depends:   base >= 4 && < 5, stm, deepseq, primes
   ghc-options:     -Wall -fno-warn-orphans -fno-warn-name-shadowing
   exposed-modules: 
                    Control.Parallel.HsSkel,
                    Control.Parallel.HsSkel.DSL,
                    Control.Parallel.HsSkel.Exec
+                   Control.Parallel.HsSkel.Examples
 
