@@ -1,0 +1,25 @@
+name:           hs-skel
+version:        0.1.1
+cabal-version:  >=1.2
+build-type:     Simple
+stability:      Experimental
+author:         Mauro Blanco, Pablo Perdomo, Pablo Ezzatti, Alberto Pardo, Marcos Viera
+synopsis:       A library for NLA operations
+description:
+    
+tested-with:    GHC==7.8.3
+maintainer:     Pablo Perdomo <pperdomo@fing.edu.uy>, Mauro Blanco <mblanco@fing.edu.uy>
+category:       Parallel
+license:        BSD3
+license-file:   LICENSE
+copyright:      Universidad de la República, Uruguay
+
+library
+  hs-source-dirs:  src
+  build-depends:   base >= 4 && < 5, stm, deepseq
+  ghc-options:     -Wall -fno-warn-orphans
+  exposed-modules: 
+                   Control.Parallel.HsSkel,
+                   Control.Parallel.HsSkel.DSL,
+                   Control.Parallel.HsSkel.Exec
+

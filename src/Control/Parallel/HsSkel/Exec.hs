@@ -1,8 +1,9 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE Arrows #-}
 
 module Control.Parallel.HsSkel.Exec where
 
-import Control.Parallel.HsSkel
+import Control.Parallel.HsSkel.DSL
 
 import Data.Traversable (mapM)
 import Control.Category ((.))
