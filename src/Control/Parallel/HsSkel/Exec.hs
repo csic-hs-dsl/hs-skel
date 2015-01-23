@@ -8,12 +8,11 @@ import Control.Parallel.HsSkel.DSL
 import Data.Traversable (mapM)
 import Control.Category ((.))
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Concurrent.STM (readTBQueue, atomically, writeTBQueue, newTBQueueIO, TBQueue)
 import Control.DeepSeq (NFData, rnf)
 import Control.Exception (evaluate)
 import Control.Monad hiding (mapM)
-import Data.List (transpose)
 import Prelude hiding (mapM, id, (.))
 
 {- ================================================================== -}
