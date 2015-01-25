@@ -67,7 +67,7 @@ execStream (StMap stream cons) = do
 execStream (StChunk stream chunkSize) = do
     qo <- newTBQueueIO queueLimit
     qi <- execStream stream
-    recc qi qo [] 0
+    _ <- forkIO $ recc qi qo [] 0
     return qo
     where 
         recc qi qo ch cant = do
