@@ -44,10 +44,10 @@ skMapSimple = proc st0 -> do
         st2 = stMap st1 skSync
     skRed st2 (skSeq (\(o, i) -> i:o)) -<< []
 
--- Ahora es medio trucho, es lo mismo que skMapSimple, pero con un chunk en el medio que genera listas unitarias...
+-- Este parece andar bien
 skMapChunk :: Skel [Integer] [Integer]
 skMapChunk = proc st0 -> do
-    let st1 = stMap (stChunk (stFromList st0) 1) (skPar $ skSeq (map doNothing))
+    let st1 = stMap (stChunk (stFromList st0) 1000) (skPar $ skSeq (map doNothing))
         st2 = stMap st1 skSync
     skRed st2 (skSeq (\(o, i) -> i ++ o)) -<< []
 
@@ -81,7 +81,7 @@ execSkMapSimple = do
 execSkMapChunk :: IO()
 execSkMapChunk = do
     print "inicio"
-    res <- exec skMapChunk [1000000000, 1000000000, 1000000000, 1000000000]
+    res <- exec skMapChunk (take 4000 $ repeat 1000000)
     print "fin"
     print res
 
