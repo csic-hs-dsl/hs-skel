@@ -1,10 +1,10 @@
 name:           hs-skel
-version:        0.1.1
-cabal-version:  >=1.2
+version:        0.0.1
+cabal-version:  >=1.20
 build-type:     Simple
 stability:      Experimental
 author:         Mauro Blanco, Pablo Perdomo, Pablo Ezzatti, Alberto Pardo, Marcos Viera
-synopsis:       A library for NLA operations
+synopsis:       
 description:
     
 tested-with:    GHC==7.8.3
@@ -15,12 +15,13 @@ license-file:   LICENSE
 copyright:      Universidad de la República, Uruguay
 
 library
-  hs-source-dirs:  src
-  build-depends:   base >= 4 && < 5, stm, deepseq, primes
-  ghc-options:     -Wall -fno-warn-orphans -fno-warn-name-shadowing
+  hs-source-dirs:   src
+  build-depends:    base >= 4.7 && < 5, stm, deepseq, primes
+  ghc-options:      -Wall -fno-warn-orphans -fno-warn-name-shadowing
+  default-Language: Haskell2010
   exposed-modules: 
-                   Control.Parallel.HsSkel,
-                   Control.Parallel.HsSkel.DSL,
-                   Control.Parallel.HsSkel.Exec
-                   Control.Parallel.HsSkel.Examples
+                    Control.Parallel.HsSkel,
+                    Control.Parallel.HsSkel.DSL,
+                    Control.Parallel.HsSkel.Exec
+                    Control.Parallel.HsSkel.Examples
 

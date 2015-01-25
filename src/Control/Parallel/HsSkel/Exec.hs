@@ -41,7 +41,7 @@ execStream (StGen gen i) = do
             let res = gen i
             case res of 
                 Just (v, i') -> do 
-                    eval v
+                    _ <- eval v
                     atomically $ writeTBQueue q (Just v)
                     execGen q i'
                 Nothing -> atomically $ writeTBQueue q Nothing
@@ -95,7 +95,7 @@ exec (SkSeq f) = (eval =<<) . liftM f . return
 exec (SkSeq_ f) = liftM f . return
 exec (SkPar sk) = \i -> (do
     mVar <- newEmptyMVar
-    forkIO (stuff i mVar)
+    _ <- forkIO (stuff i mVar)
     return $ Future mVar)
     where
         stuff i mVar = do
