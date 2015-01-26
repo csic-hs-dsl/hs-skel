@@ -22,7 +22,8 @@ module Control.Parallel.HsSkel.DSL (
     skMapF,
     skPairF,
     skTraverseF,
-    skDaC
+    skDaC,
+    skParFromFunc
 ) where
 
 import Data.Traversable (Traversable)
@@ -158,3 +159,5 @@ skDaC skel isTrivial split combine = proc i -> do
             oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
             returnA -< combine i oSplit
 
+skParFromFunc :: (NFData o) => (i -> o) -> Skel i (Future o)
+skParFromFunc = skPar . skSeq

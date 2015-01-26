@@ -19,7 +19,8 @@ module Control.Parallel.HsSkel (
     skMapF,
     skPairF,
     skTraverseF,
-    skDaC
+    skDaC,
+    skParFromFunc
 ) where
 
 import Control.Parallel.HsSkel.DSL

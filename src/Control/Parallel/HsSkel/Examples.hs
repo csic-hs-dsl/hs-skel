@@ -1,6 +1,6 @@
 {-# LANGUAGE Arrows #-}
 
-module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execSkMapChunk, execSkVecProdChunk)
+module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execSkMapChunk, execSkMapSkelSimple, execSkVecProdChunk)
 where
 
 import Control.Arrow(returnA)
@@ -26,8 +26,9 @@ doNothing n = if n <= 0
 {- ============================================================== -}
 
 -- Este parece andar bien
-skParSimple :: Skel (Integer) (Integer, Integer, Integer, Integer)
-skParSimple = proc (a) -> do
+-- Usa: skPar, skSeq, skSync
+skParSimple :: Skel Integer (Integer, Integer, Integer, Integer)
+skParSimple = proc a -> do
     a' <- skPar (skSeq doNothing) -< a
     b' <- skPar (skSeq doNothing) -< a
     c' <- skPar (skSeq doNothing) -< a
@@ -39,24 +40,33 @@ skParSimple = proc (a) -> do
     returnA -< (a'', b'', c'', d'')
 
 -- Este parece andar bien
+-- Usa: skPar, skSeq, skSync, stMap, stFromList
 skMapSimple :: Skel [Integer] [Integer]
-skMapSimple = proc st0 -> do
-    let st1 = stMap (stFromList st0) (skPar $ skSeq doNothing)
+skMapSimple = proc l -> do
+    let st1 = stMap (stFromList l) (skParFromFunc doNothing)
         st2 = stMap st1 skSync
     skRed st2 (skSeq (\(o, i) -> i:o)) -<< []
 
 -- Este parece andar bien
+-- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: Skel [Integer] [Integer]
-skMapChunk = proc st0 -> do
-    let st1 = stMap (stChunk (stFromList st0) 1000) (skPar $ skSeq (map doNothing))
+skMapChunk = proc l -> do
+    let st1 = stMap (stChunk (stFromList l) 1000) (skParFromFunc $ map doNothing)
         st2 = stMap st1 skSync
     skRed st2 (skSeq (\(o, i) -> i ++ o)) -<< []
+
+-- Este parece andar bien
+-- Usa: skPar, skSeq, skSync, skMap, skTraverseF
+skMapSkelSimple :: Skel [Integer] [Integer]
+skMapSkelSimple = proc l -> do 
+    lf <- skMap (skParFromFunc doNothing) -< l
+    skSync . skTraverseF -< lf
 
 -- Este no anda bien
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = stMap (stChunk (stFromList pairs) 10000000) (skPar $ skSeq $ sum . map (uncurry (*)))
+        st1 = stMap (stChunk (stFromList pairs) 10000000) (skParFromFunc $ sum . map (uncurry (*)))
         st2 = stMap st1 skSync
     skRed st2 (skSeq $ (uncurry (+))) -<< 0
 
@@ -85,6 +95,12 @@ execSkMapChunk = do
     print "fin"
     print res
 
+execSkMapSkelSimple :: IO()
+execSkMapSkelSimple = do
+    print "inicio"
+    res <- exec skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
+    print "fin"
+    print res
 
 execSkVecProdChunk :: IO()
 execSkVecProdChunk = do
