@@ -4,6 +4,7 @@ module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execS
 where
 
 import Control.Arrow(returnA)
+import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
 
@@ -55,10 +56,9 @@ skMapChunk = proc st0 -> do
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = stChunk (stFromList pairs) 1000000
-        st2 = stMap st1 (skPar $ skSeq $ map (uncurry (*)))
-        st3 = stMap st2 skSync
-    skRed st3 (skSeq $ (\(o, l) -> o + (sum l))) -<< 0
+        st1 = stMap (stChunk (stFromList pairs) 10000000) (skPar $ skSeq $ sum . map (uncurry (*)))
+        st2 = stMap st1 skSync
+    skRed st2 (skSeq $ (uncurry (+))) -<< 0
 
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
@@ -89,6 +89,6 @@ execSkMapChunk = do
 execSkVecProdChunk :: IO()
 execSkVecProdChunk = do
     print "inicio"
-    res <- exec skVecProdChunk ([0 .. 10000000], [6 .. 10000006])
+    res <- exec skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
     print "fin"
     print res
