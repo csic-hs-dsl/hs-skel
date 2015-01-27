@@ -70,6 +70,32 @@ skVecProdChunk = proc (vA, vB) -> do
         st2 = stMap st1 skSync
     skRed st2 (skSeq $ (uncurry (+))) -<< 0
 
+-- TODO: por ahora solo hace un paso
+skKMeans :: Skel ([(Double, Double)], [(Double, Double)]) [(Double, Double)]
+skKMeans = proc (ps, ms) -> do
+    ptgs <- calcPointGroup -< (ps, ms)
+    ms' <- calcNewMeans -< ptgs
+    returnA -< ms'
+        where
+            -- A partir de los puntos y las medias calcula a que grupo (índice de ms) pertenece cada punto
+            calcPointGroup = proc (ps, ms) -> do
+                let aux p = (p, 
+                            snd $ foldl1 
+                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i')) 
+                                (zipWith (\m i -> (dist p m, i)) ms [0 :: Integer .. ]))
+                ptgsF <- skMap $ skParFromFunc aux -<< ps
+                skMap $ skSync -< ptgsF
+
+            -- Sabiendo a que grupo pertenece cada grupo, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
+            calcNewMeans = proc ptgs -> do
+                msF <- skMap $ skParFromFunc (\i -> let ((acx, acy), cont) = foldl1 foldAux ptgs
+                                                        foldAux ((acx, acy), count) ((x, y), i') = if i == i' then 
+                                                                                                        ((x + acx, y + acy), count + 1) 
+                                                                                                        else ((acx, acy), count)
+                                                    in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 :: Integer .. ]
+                skMap $ skSync -< msF
+            dist (x, y) (x', y') = (abs $ x - x', abs $ y - y')
+            
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
