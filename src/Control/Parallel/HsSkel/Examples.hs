@@ -71,11 +71,16 @@ skVecProdChunk = proc (vA, vB) -> do
     skRed st2 (skSeq $ (uncurry (+))) -<< 0
 
 -- TODO: por ahora solo hace un paso
-skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
-skKMeans = proc ((ps, ms), k) -> do
+skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double) [(Double, Double)]
+skKMeans = proc ((ps, ms), k, threshold) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
-    returnA -< ms'
+    let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+    if epsilon < threshold then
+        returnA -< ms'
+    else    
+        skKMeans -< ((ps, ms'), k, threshold)
+        
         where
             -- A partir de los puntos y las medias calcula a que grupo (índice de ms) pertenece cada punto
             calcPointGroup = proc (ps, ms) -> do
