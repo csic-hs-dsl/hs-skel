@@ -86,7 +86,7 @@ skKMeans = proc (ps, ms) -> do
                 ptgsF <- skMap $ skParFromFunc aux -<< ps
                 skMap $ skSync -< ptgsF
 
-            -- Sabiendo a que grupo pertenece cada grupo, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
+            -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc ptgs -> do
                 msF <- skMap $ skParFromFunc (\i -> let ((acx, acy), cont) = foldl1 foldAux ptgs
                                                         foldAux ((acx, acy), count) ((x, y), i') = if i == i' then 
@@ -94,7 +94,7 @@ skKMeans = proc (ps, ms) -> do
                                                                                                         else ((acx, acy), count)
                                                     in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 :: Integer .. ]
                 skMap $ skSync -< msF
-            dist (x, y) (x', y') = (abs $ x - x', abs $ y - y')
+            dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
             
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
