@@ -10,7 +10,7 @@ import Control.Parallel.HsSkel.Exec
 
 import Prelude hiding (mapM, id, (.))
 
-import System.Random
+import System.Random (mkStdGen, randomRs)
 
 {- ========================================================= -}
 {- ======================== Utils ========================== -}
