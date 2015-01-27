@@ -109,42 +109,42 @@ skKMeans = proc ((ps, ms), k, threshold) -> do
 
 execSkParSimple :: IO()
 execSkParSimple = do
-    print "inicio"
+    print "inicio: execSkParSimple"
     res <- exec skParSimple (1000000000)
     print "fin"
     print res
 
 execSkMapSimple :: IO()
 execSkMapSimple = do
-    print "inicio"
+    print "inicio: execSkMapSimple"
     res <- exec skMapSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
 execSkMapChunk :: IO()
 execSkMapChunk = do
-    print "inicio"
+    print "inicio: execSkMapChunk"
     res <- exec skMapChunk (take 4000 $ repeat 1000000)
     print "fin"
     print res
 
 execSkMapSkelSimple :: IO()
 execSkMapSkelSimple = do
-    print "inicio"
+    print "inicio: execSkMapSkelSimple"
     res <- exec skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
 execSkVecProdChunk :: IO()
 execSkVecProdChunk = do
-    print "inicio"
+    print "inicio: execSkVecProdChunk"
     res <- exec skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
     print "fin"
     print res
 
 execSkKMeans :: IO()
 execSkKMeans = do
-    print "inicio"
+    print "inicio: execSkKMeans"
     let n = 100
     let k  = 10
     let gen = mkStdGen 1
