@@ -1,6 +1,6 @@
 {-# LANGUAGE Arrows #-}
 
-module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execSkMapChunk, execSkMapSkelSimple, execSkVecProdChunk)
+module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execSkMapChunk, execSkMapSkelSimple, execSkVecProdChunk, execSkKMeans)
 where
 
 import Control.Arrow(returnA)
@@ -9,6 +9,8 @@ import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
 
 import Prelude hiding (mapM, id, (.))
+
+import System.Random
 
 {- ========================================================= -}
 {- ======================== Utils ========================== -}
@@ -80,7 +82,7 @@ skKMeans = proc ((ps, ms), k, threshold) -> do
         returnA -< ms'
     else    
         skKMeans -< ((ps, ms'), k, threshold)
-        
+
         where
             -- A partir de los puntos y las medias calcula a que grupo (índice de ms) pertenece cada punto
             calcPointGroup = proc (ps, ms) -> do
@@ -137,5 +139,21 @@ execSkVecProdChunk :: IO()
 execSkVecProdChunk = do
     print "inicio"
     res <- exec skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
+    print "fin"
+    print res
+
+execSkKMeans :: IO()
+execSkKMeans = do
+    print "inicio"
+    let n = 100
+    let k  = 10
+    let gen = mkStdGen 1
+    let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
+    let (pys, pysRest) = splitAt n pxsRest
+    let (mxs, mxsRest) = splitAt k pysRest
+    let (mys, _) = splitAt k mxsRest
+    let ps = zip pxs pys
+    let ms = zip mxs mys
+    res <- exec skKMeans ((ps, ms), fromIntegral k, 0.5)
     print "fin"
     print res
