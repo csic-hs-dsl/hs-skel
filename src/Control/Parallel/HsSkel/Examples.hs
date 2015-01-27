@@ -82,7 +82,7 @@ skKMeans = proc ((ps, ms), k) -> do
                 let aux p = (p, 
                             snd $ foldl1 
                                 (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i')) 
-                                (zipWith (\m i -> (dist p m, i)) ms [0 :: Integer .. ]))
+                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
                 ptgsF <- skMap $ skParFromFunc aux -<< ps
                 skMap $ skSync -< ptgsF
 
@@ -92,7 +92,7 @@ skKMeans = proc ((ps, ms), k) -> do
                                                         foldAux ((acx, acy), count) ((x, y), i') = if i == i' then 
                                                                                                         ((x + acx, y + acy), count + 1) 
                                                                                                         else ((acx, acy), count)
-                                                    in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 :: Integer .. k - 1]
+                                                    in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
                 skMap $ skSync -< msF
             dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
             
