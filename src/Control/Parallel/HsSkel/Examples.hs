@@ -10,7 +10,8 @@ import Control.Parallel.HsSkel.Exec
 
 import Prelude hiding (mapM, id, (.))
 
-import System.Random (mkStdGen, randomRs)
+import System.Random (randomRs)
+import System.Random.TF.Init (mkTFGen)
 
 {- ========================================================= -}
 {- ======================== Utils ========================== -}
@@ -147,13 +148,15 @@ execSkKMeans = do
     print "inicio: execSkKMeans"
     let n = 100
     let k  = 10
-    let gen = mkStdGen 1
+    let gen = mkTFGen 1 -- mkStdGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
     let (pys, pysRest) = splitAt n pxsRest
     let (mxs, mxsRest) = splitAt k pysRest
     let (mys, _) = splitAt k mxsRest
     let ps = zip pxs pys
     let ms = zip mxs mys
+    print ps
+    print ms
     res <- exec skKMeans ((ps, ms), fromIntegral k, 0.5)
     print "fin"
     print res
