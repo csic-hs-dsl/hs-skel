@@ -190,8 +190,8 @@ execSkKMeansOneStep = do
 execSkKMeans :: IO()
 execSkKMeans = do
     print "inicio: execSkKMeans"
-    let n = 100
-    let k  = 10
+    let n = 100000
+    let k  = 100
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
     let (pys, pysRest) = splitAt n pxsRest
@@ -199,10 +199,10 @@ execSkKMeans = do
     let (mys, _) = splitAt k mxsRest
     let ps = zip pxs pys
     let ms = zip mxs mys
-    print "ps: "
-    print ps
-    print "ms: "
-    print ms
+    --print "ps: "
+    --print ps
+    --print "ms: "
+    --print ms
     resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005)
     print "fin"
     print resSk
