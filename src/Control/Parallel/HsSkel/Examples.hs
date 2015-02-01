@@ -1,7 +1,13 @@
 {-# LANGUAGE Arrows #-}
 
-module Control.Parallel.HsSkel.Examples (execSkParSimple, execSkMapSimple, execSkMapChunk, execSkMapSkelSimple, execSkVecProdChunk, execSkKMeans)
-where
+module Control.Parallel.HsSkel.Examples (
+    execSkParSimple, 
+    execSkMapSimple, 
+    execSkMapChunk, 
+    execSkMapSkelSimple, 
+    execSkVecProdChunk, 
+    execSkKMeansOneStep
+) where
 
 import Control.Arrow(returnA)
 import Control.Category ((.))
@@ -12,6 +18,8 @@ import Prelude hiding (mapM, id, (.))
 
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
+
+import Data.List (groupBy, minimumBy)
 
 {- ========================================================= -}
 {- ======================== Utils ========================== -}
@@ -73,17 +81,15 @@ skVecProdChunk = proc (vA, vB) -> do
         st2 = stMap st1 skSync
     skRed st2 (skSeq $ (uncurry (+))) -<< 0
 
--- TODO: por ahora solo hace un paso
-skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double) [(Double, Double)]
-skKMeans = proc ((ps, ms), k, threshold) -> do
+
+
+dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
+
+skKMeansOneStep :: Skel (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
+skKMeansOneStep = proc ((ps, ms), k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
-    let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
-    if epsilon < threshold then
-        returnA -< ms'
-    else    
-        skKMeans -< ((ps, ms'), k, threshold)
-
+    returnA -< ms'
         where
             -- A partir de los puntos y las medias calcula a que grupo (índice de ms) pertenece cada punto
             calcPointGroup = proc (ps, ms) -> do
@@ -102,8 +108,17 @@ skKMeans = proc ((ps, ms), k, threshold) -> do
                                                                                                         else ((acx, acy), count)
                                                     in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
                 skMap $ skSync -< msF
-            dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
             
+skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double) [(Double, Double)]
+skKMeans = proc ((ps, ms), k, threshold) -> do
+    ms' <- skKMeansOneStep -< ((ps, ms), k)
+    let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+    if epsilon < threshold then
+        returnA -< ms'
+    else    
+        skKMeans -< ((ps, ms'), k, threshold)
+
+
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
@@ -143,8 +158,8 @@ execSkVecProdChunk = do
     print "fin"
     print res
 
-execSkKMeans :: IO()
-execSkKMeans = do
+execSkKMeansOneStep :: IO()
+execSkKMeansOneStep = do
     print "inicio: execSkKMeans"
     let n = 100
     let k  = 10
@@ -157,6 +172,7 @@ execSkKMeans = do
     let ms = zip mxs mys
     print ps
     print ms
-    res <- exec skKMeans ((ps, ms), fromIntegral k, 0.5)
+    res <- exec skKMeansOneStep ((ps, ms), fromIntegral k)
     print "fin"
     print res
+
