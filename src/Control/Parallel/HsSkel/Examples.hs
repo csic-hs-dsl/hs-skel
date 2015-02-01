@@ -6,7 +6,8 @@ module Control.Parallel.HsSkel.Examples (
     execSkMapChunk, 
     execSkMapSkelSimple, 
     execSkVecProdChunk, 
-    execSkKMeansOneStep
+    execSkKMeansOneStep,
+    execSkKMeans
 ) where
 
 import Control.Arrow(returnA)
@@ -84,6 +85,7 @@ skVecProdChunk = proc (vA, vB) -> do
 
 
 
+dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
 skKMeansOneStep :: Skel (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
@@ -161,10 +163,10 @@ execSkVecProdChunk = do
 
 execSkKMeansOneStep :: IO()
 execSkKMeansOneStep = do
-    print "inicio: execSkKMeans"
+    print "inicio: execSkKMeansOneStep"
     let n = 100
     let k  = 10
-    let gen = mkTFGen 1 -- mkStdGen 1
+    let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
     let (pys, pysRest) = splitAt n pxsRest
     let (mxs, mxsRest) = splitAt k pysRest
@@ -181,9 +183,33 @@ execSkKMeansOneStep = do
 
     print "kMeansTestMauro"
     print $ kMeansTestMauro ps ms
-    
     print "kMeansTestPablo"
     kMeansTestPablo ps ms >>= print 
+    
+
+execSkKMeans :: IO()
+execSkKMeans = do
+    print "inicio: execSkKMeans"
+    let n = 100
+    let k  = 10
+    let gen = mkTFGen 1
+    let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
+    let (pys, pysRest) = splitAt n pxsRest
+    let (mxs, mxsRest) = splitAt k pysRest
+    let (mys, _) = splitAt k mxsRest
+    let ps = zip pxs pys
+    let ms = zip mxs mys
+    print "ps: "
+    print ps
+    print "ms: "
+    print ms
+    resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005)
+    print "fin"
+    print resSk
+
+
+
+
 
 kMeansTestMauro :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
 kMeansTestMauro ps ms = 
