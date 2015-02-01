@@ -102,7 +102,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
-                msF <- skMap $ skParFromFunc (\i -> let ((acx, acy), cont) = foldl1 foldAux ptgs
+                msF <- skMap $ skParFromFunc (\i -> let ((acx, acy), cont) = foldl foldAux ((0 :: Double, 0 :: Double ), 0 :: Integer) ptgs
                                                         foldAux ((acx, acy), count) ((x, y), i') = if i == i' then 
                                                                                                         ((x + acx, y + acy), count + 1) 
                                                                                                         else ((acx, acy), count)
@@ -175,4 +175,24 @@ execSkKMeansOneStep = do
     res <- exec skKMeansOneStep ((ps, ms), fromIntegral k)
     print "fin"
     print res
+
+    print "calcNewMeans"
+    print $ kMeansTestMauro ps ms
+
+kMeansTestMauro :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
+kMeansTestMauro ps ms = 
+    let dist (x, y) (x', y')    = (x - x') ** 2 + (y - y') ** 2
+        sumPair (x, y) (x', y') = (x + x', y + y')
+        divPair (x, y) d        = (x / d, y / d)
+        distToMeans p           = map (\m -> (m, dist m p)) ms
+        closestMean p           = foldl1 (\a b -> if (snd a) < (snd b) then a else b) (distToMeans p)
+        pointsWithMean          = map (\p -> (p, closestMean p)) ps
+        pointsWithMeanOfMean m  = filter (\(_, (m', _)) -> m == m') pointsWithMean
+        calcNewMean m           = 
+            let pointsWithMeanOfMeanLen = fromIntegral . length . pointsWithMeanOfMean $ m
+                sumPointsOfMean = foldl (\p (p', (_, _)) -> sumPair p p') (0, 0) (pointsWithMeanOfMean m)
+            in (\p -> divPair p pointsWithMeanOfMeanLen) $ sumPointsOfMean
+
+        calcNewMeans = map calcNewMean ms
+    in calcNewMeans
 
