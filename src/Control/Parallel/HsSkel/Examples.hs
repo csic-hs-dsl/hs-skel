@@ -23,6 +23,8 @@ import System.Random.TF.Init (mkTFGen)
 import Data.List (groupBy, minimumBy, find, sortBy)
 import Data.Maybe (fromJust)
 
+import Debug.Trace (trace)
+
 {- ========================================================= -}
 {- ======================== Utils ========================== -}
 {- ========================================================= -}
@@ -118,10 +120,10 @@ data KMeansStopReason = ByStep | ByThreshold
 skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
 skKMeans = proc ((ps, ms), k, threshold, step) -> do
     ms' <- skKMeansOneStep -< ((ps, ms), k)
-    let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+    let epsilon = trace "step" $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
     if epsilon < threshold then
         returnA -< (ms', ByThreshold)
-    else if k == 0 then
+    else if step == 0 then
         returnA -< (ms', ByStep)
     else   
         skKMeans -< ((ps, ms'), k, threshold, step - 1)
@@ -195,7 +197,7 @@ execSkKMeansOneStep = do
 execSkKMeans :: IO()
 execSkKMeans = do
     print "inicio: execSkKMeans"
-    let n = 200000
+    let n = 10000
     let k  = 100
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
