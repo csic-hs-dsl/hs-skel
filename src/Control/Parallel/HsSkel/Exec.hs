@@ -48,7 +48,7 @@ execStream (StGen gen i) = do
 
 --execStream (StMap (StMap stream' cons') cons) =  execStream (StMap stream' (cons . cons'))
 
-execStream (StMap stream cons) = do
+execStream (StMap cons stream) = do
     qo <- newTBQueueIO queueLimit
     qi <- execStream stream
     _ <- forkIO $ consumer qi qo
@@ -64,7 +64,7 @@ execStream (StMap stream cons) = do
                     atomically $ writeTBQueue qo (Just vo)
                     consumer qi qo
                 Nothing -> atomically $ writeTBQueue qo Nothing
-execStream (StChunk stream chunkSize) = do
+execStream (StChunk chunkSize stream) = do
     qo <- newTBQueueIO queueLimit
     qi <- execStream stream
     _ <- forkIO $ recc qi qo [] 0
@@ -115,7 +115,7 @@ exec (SkIf sl sr) = \input ->
         Left i -> exec sl i >>= return . Left
         Right i -> exec sr i >>= return . Right
 exec (SkApply) = \(sk, i) -> exec sk i
-exec (SkRed stream red) = \z -> do
+exec (SkRed red stream) = \z -> do
     q <- execStream stream   
     reducer q z
     where 

@@ -61,13 +61,13 @@ data Skel i o where
     SkIf    :: Skel i o -> Skel i' o' -> Skel (Either i i') (Either o o')
     SkApply :: Skel (Skel i o, i) o
 
-    SkRed   :: Stream i -> Skel (o, i) o -> Skel o o
+    SkRed   :: Skel (o, i) o -> Stream i -> Skel o o
     
     
 data Stream d where
-    StGen :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
-    StMap :: Stream i -> Skel i o -> Stream o
-    StChunk :: Stream i -> Integer -> Stream [i]
+    StGen     :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
+    StMap     :: Skel i o -> Stream i -> Stream o
+    StChunk   :: Integer -> Stream i -> Stream [i]
 
 
 {- ================================================================== -}
@@ -114,16 +114,16 @@ skComp = SkComp
 skMap :: (Traversable t) => Skel i o -> Skel (t i) (t o)
 skMap = SkMap
 
-skRed :: Stream i -> Skel (o, i) o -> Skel o o
+skRed :: Skel (o, i) o -> Stream i -> Skel o o
 skRed = SkRed
 
 stGen :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
 stGen = StGen
 
-stMap :: Stream i -> Skel i o -> Stream o
+stMap :: Skel i o -> Stream i -> Stream o
 stMap = StMap
 
-stChunk :: Stream i -> Integer -> Stream [i]
+stChunk :: Integer -> Stream i -> Stream [i]
 stChunk = StChunk
 
 stFromList :: (NFData a) => [a] -> Stream a

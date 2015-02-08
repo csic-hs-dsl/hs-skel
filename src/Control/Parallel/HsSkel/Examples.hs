@@ -58,17 +58,17 @@ skParSimple = proc a -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList
 skMapSimple :: Skel [Integer] [Integer]
 skMapSimple = proc l -> do
-    let st1 = stMap (stFromList l) (skParFromFunc doNothing)
-        st2 = stMap st1 skSync
-    skRed st2 (skSeq (\(o, i) -> i:o)) -<< []
+    let st1 = stMap (skParFromFunc doNothing) (stFromList l)
+        st2 = stMap skSync st1
+    skRed (skSeq (\(o, i) -> i:o)) st2 -<< []
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: Skel [Integer] [Integer]
 skMapChunk = proc l -> do
-    let st1 = stMap (stChunk (stFromList l) 1000) (skParFromFunc $ map doNothing)
-        st2 = stMap st1 skSync
-    skRed st2 (skSeq (\(o, i) -> i ++ o)) -<< []
+    let st1 = stMap (skParFromFunc $ map doNothing) (stChunk 1000 (stFromList l))
+        st2 = stMap skSync st1
+    skRed (skSeq (\(o, i) -> i ++ o)) st2 -<< []
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, skMap, skTraverseF
@@ -81,9 +81,9 @@ skMapSkelSimple = proc l -> do
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = stMap (stChunk (stFromList pairs) 10000000) (skParFromFunc $ sum . map (uncurry (*)))
-        st2 = stMap st1 skSync
-    skRed st2 (skSeq $ (uncurry (+))) -<< 0
+        st1 = stMap (skParFromFunc $ sum . map (uncurry (*))) (stChunk 10000000 (stFromList pairs))
+        st2 = stMap skSync st1
+    skRed (skSeq $ (uncurry (+))) st2 -<< 0
 
 
 
@@ -104,8 +104,8 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                 (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
                 --ptgsF <- skMap $ skParFromFunc aux -<< ps
                 --skMap $ skSync -< ptgsF
-                let resChunk = stMap (stMap (stChunk (stFromList ps) 1000) (skParFromFunc $ map aux)) skSync
-                skRed resChunk (skSeq (\(o, i) -> i ++ o)) -<< []
+                let resChunk = stMap skSync (stMap (skParFromFunc $ map aux) (stChunk 1000 (stFromList ps)))
+                skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
