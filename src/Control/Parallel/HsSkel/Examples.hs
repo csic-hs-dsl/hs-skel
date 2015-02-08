@@ -111,15 +111,20 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                                                                                         else ((acx, acy), count)
                                                     in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
                 skMap $ skSync -< msF
+
+data KMeansStopReason = ByStep | ByThreshold
+    deriving Show
             
-skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double) [(Double, Double)]
-skKMeans = proc ((ps, ms), k, threshold) -> do
+skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans = proc ((ps, ms), k, threshold, step) -> do
     ms' <- skKMeansOneStep -< ((ps, ms), k)
     let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
     if epsilon < threshold then
-        returnA -< ms'
-    else    
-        skKMeans -< ((ps, ms'), k, threshold)
+        returnA -< (ms', ByThreshold)
+    else if k == 0 then
+        returnA -< (ms', ByStep)
+    else   
+        skKMeans -< ((ps, ms'), k, threshold, step - 1)
 
 
 {- =============================================================== -}
@@ -190,7 +195,7 @@ execSkKMeansOneStep = do
 execSkKMeans :: IO()
 execSkKMeans = do
     print "inicio: execSkKMeans"
-    let n = 100000
+    let n = 200000
     let k  = 100
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
@@ -203,7 +208,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005)
+    resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 
