@@ -1,0 +1,2 @@
+- Crear una operación stUnchunk que permita sacarse los chunks de arriba.
+- Que el generador pueda devolver futures.

@@ -58,7 +58,7 @@ skParSimple = proc a -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList
 skMapSimple :: Skel [Integer] [Integer]
 skMapSimple = proc l -> do
-    let st1 = stMap (skParFromFunc doNothing) (stFromList l)
+    let st1 = stMap (skPar doNothing) (stFromList l)
         st2 = stMap skSync st1
     skRed (skSeq (\(o, i) -> i:o)) st2 -<< []
 
@@ -66,7 +66,7 @@ skMapSimple = proc l -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: Skel [Integer] [Integer]
 skMapChunk = proc l -> do
-    let st1 = stMap (skParFromFunc $ map doNothing) (stChunk 1000 (stFromList l))
+    let st1 = stMap (skPar $ map doNothing) (stChunk 1000 (stFromList l))
         st2 = stMap skSync st1
     skRed (skSeq (\(o, i) -> i ++ o)) st2 -<< []
 
@@ -74,14 +74,14 @@ skMapChunk = proc l -> do
 -- Usa: skPar, skSeq, skSync, skMap, skTraverseF
 skMapSkelSimple :: Skel [Integer] [Integer]
 skMapSkelSimple = proc l -> do 
-    lf <- skMap (skParFromFunc doNothing) -< l
+    lf <- skMap (skPar doNothing) -< l
     skSync . skTraverseF -< lf
 
 -- Este no anda bien
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = stMap (skParFromFunc $ sum . map (uncurry (*))) (stChunk 10000000 (stFromList pairs))
+        st1 = stMap (skPar $ sum . map (uncurry (*))) (stChunk 10000000 (stFromList pairs))
         st2 = stMap skSync st1
     skRed (skSeq $ (uncurry (+))) st2 -<< 0
 
@@ -104,16 +104,17 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                 (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
                 --ptgsF <- skMap $ skParFromFunc aux -<< ps
                 --skMap $ skSync -< ptgsF
-                let resChunk = stMap skSync (stMap (skParFromFunc $ map aux) (stChunk 1000 (stFromList ps)))
+                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 1000 (stFromList ps)))
                 skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
-                msF <- skMap $ skParFromFunc (\i -> let ((acx, acy), cont) = foldl foldAux ((0 :: Double, 0 :: Double ), 0 :: Integer) ptgs
-                                                        foldAux ((acx, acy), count) ((x, y), i') = if i == i' then 
-                                                                                                        ((x + acx, y + acy), count + 1) 
-                                                                                                        else ((acx, acy), count)
-                                                    in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
+                msF <- skMap $ skPar (\i -> let ((acx, acy), cont) = foldl foldAux ((0 :: Double, 0 :: Double ), 0 :: Integer) ptgs
+                                                foldAux ((acx, acy), count) ((x, y), i') = 
+                                                    if i == i' then 
+                                                         ((x + acx, y + acy), count + 1) 
+                                                    else ((acx, acy), count)
+                                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
                 skMap $ skSync -< msF
 
 data KMeansStopReason = ByStep | ByThreshold
@@ -122,7 +123,7 @@ data KMeansStopReason = ByStep | ByThreshold
 skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
 skKMeans = proc ((ps, ms), k, threshold, step) -> do
     ms' <- skKMeansOneStep -< ((ps, ms), k)
-    let epsilon = trace "step" $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+    let epsilon = trace ("step: " ++ show step) $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
     if epsilon < threshold then
         returnA -< (ms', ByThreshold)
     else if step == 0 then

@@ -1,6 +1,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Arrows #-}
 
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Control.Parallel.HsSkel.DSL (
     -- Types:
     Future(..),
@@ -22,8 +25,7 @@ module Control.Parallel.HsSkel.DSL (
     skMapF,
     skPairF,
     skTraverseF,
-    skDaC,
-    skParFromFunc
+    skDaC
 ) where
 
 import Data.Traversable (Traversable)
@@ -102,9 +104,6 @@ instance ArrowApply Skel where
 skSeq :: (NFData o) => (i -> o) -> Skel i o
 skSeq = SkSeq
 
-skPar :: Skel i o -> Skel i (Future o)
-skPar = SkPar
-
 skSync :: Skel (Future i) i
 skSync = SkSync
 
@@ -132,6 +131,15 @@ stFromList l = StGen go l
         go [] = Nothing
         go (x:xs) = Just (x, xs)
 
+class SkParSupport a i o where
+    skPar :: a i o -> Skel i (Future o)
+    
+instance SkParSupport Skel i o where
+    skPar = SkPar
+
+instance NFData o => SkParSupport (->) i o where
+    skPar = skPar . skSeq
+
 
 {- ================================================================== -}
 {- ========================= Util Functions ========================= -}
@@ -158,5 +166,3 @@ skDaC skel isTrivial split combine = proc i -> do
             oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
             returnA -< combine i oSplit
 
-skParFromFunc :: (NFData o) => (i -> o) -> Skel i (Future o)
-skParFromFunc = skPar . skSeq
