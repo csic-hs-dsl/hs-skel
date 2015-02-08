@@ -13,6 +13,7 @@ module Control.Parallel.HsSkel (
     stGen,
     stMap,
     stChunk,
+    stUnChunk,
     stFromList,
     -- Utils:
     skConst,

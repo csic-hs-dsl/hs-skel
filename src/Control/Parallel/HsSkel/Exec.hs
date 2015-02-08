@@ -85,6 +85,20 @@ execStream (StChunk chunkSize stream) = do
                 Nothing -> do
                     atomically $ writeTBQueue qo (Just $ reverse ch)
                     atomically $ writeTBQueue qo Nothing
+execStream (StUnChunk stream) = do
+    qo <- newTBQueueIO queueLimit
+    qi <- execStream stream
+    _ <- forkIO $ recc qi qo
+    return qo
+    where 
+        recc qi qo = do
+            i <- atomically $ readTBQueue qi
+            case i of
+                Just vsi -> do
+                    mapM_ (\v -> atomically $ writeTBQueue qo (Just v)) vsi
+                    recc qi qo
+                Nothing -> do
+                    atomically $ writeTBQueue qo Nothing
 
 {- ================================================================== -}
 {- ======================== Skel Execution ========================== -}

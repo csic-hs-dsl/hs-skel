@@ -19,6 +19,7 @@ module Control.Parallel.HsSkel.DSL (
     stGen,
     stMap,
     stChunk,
+    stUnChunk,
     stFromList,
     -- Utils:
     skConst,
@@ -70,7 +71,7 @@ data Stream d where
     StGen     :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
     StMap     :: Skel i o -> Stream i -> Stream o
     StChunk   :: Integer -> Stream i -> Stream [i]
-
+    StUnChunk :: Stream [i] -> Stream i
 
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
@@ -112,7 +113,7 @@ skComp = SkComp
 
 skMap :: (Traversable t) => Skel i o -> Skel (t i) (t o)
 skMap = SkMap
-
+    
 skRed :: Skel (o, i) o -> Stream i -> Skel o o
 skRed = SkRed
 
@@ -124,6 +125,9 @@ stMap = StMap
 
 stChunk :: Integer -> Stream i -> Stream [i]
 stChunk = StChunk
+
+stUnChunk :: Stream [i] -> Stream i
+stUnChunk = StUnChunk
 
 stFromList :: (NFData a) => [a] -> Stream a
 stFromList l = StGen go l
