@@ -102,8 +102,10 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                             snd $ foldl1 
                                 (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i')) 
                                 (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
-                ptgsF <- skMap $ skParFromFunc aux -<< ps
-                skMap $ skSync -< ptgsF
+                --ptgsF <- skMap $ skParFromFunc aux -<< ps
+                --skMap $ skSync -< ptgsF
+                let resChunk = stMap (stMap (stChunk (stFromList ps) 1000) (skParFromFunc $ map aux)) skSync
+                skRed resChunk (skSeq (\(o, i) -> i ++ o)) -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
@@ -197,7 +199,7 @@ execSkKMeansOneStep = do
 execSkKMeans :: IO()
 execSkKMeans = do
     print "inicio: execSkKMeans"
-    let n = 10000
+    let n = 200000
     let k  = 100
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen

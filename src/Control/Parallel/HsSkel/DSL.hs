@@ -117,7 +117,6 @@ skMap = SkMap
 skRed :: Stream i -> Skel (o, i) o -> Skel o o
 skRed = SkRed
 
-
 stGen :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
 stGen = StGen
 
