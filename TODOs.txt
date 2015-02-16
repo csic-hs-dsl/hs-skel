@@ -1,2 +1,4 @@
 - Crear una operación stUnchunk que permita sacarse los chunks de arriba.
 - Que el generador pueda devolver futures.
+- Que los chunks sean vectores en lugar de listas.
+- Crear tests funcionales.
