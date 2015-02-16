@@ -4,6 +4,7 @@ module Control.Parallel.HsSkel.Examples (
     execSkParSimple, 
     execSkMapSimple, 
     execSkMapChunk, 
+    execSkMapChunkUnChunk,
     execSkMapSkelSimple, 
     execSkVecProdChunk, 
     execSkKMeansOneStep,
@@ -69,6 +70,16 @@ skMapChunk = proc l -> do
     let st1 = stMap (skPar $ map doNothing) (stChunk 1000 (stFromList l))
         st2 = stMap skSync st1
     skRed (skSeq (\(o, i) -> i ++ o)) st2 -<< []
+
+-- Este parece andar bien
+-- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
+-- Ojo que desordena la lista!
+skMapChunkUnChunk :: Skel [Integer] [Integer]
+skMapChunkUnChunk = proc l -> do
+    let st1 = stMap (skPar $ map doNothing) (stChunk 1000 (stFromList l))
+        st2 = stMap skSync st1
+        st3 = stUnChunk st2
+    skRed (skSeq (\(o, i) -> i : o)) st3 -<< []
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, skMap, skTraverseF
@@ -154,6 +165,13 @@ execSkMapChunk :: IO()
 execSkMapChunk = do
     print "inicio: execSkMapChunk"
     res <- exec skMapChunk (take 4000 $ repeat 1000000)
+    print "fin"
+    print res
+
+execSkMapChunkUnChunk :: IO()
+execSkMapChunkUnChunk = do
+    print "inicio: execSkMapChunkUnChunk"
+    res <- exec skMapChunkUnChunk (take 4000 $ repeat 1000000)
     print "fin"
     print res
 
