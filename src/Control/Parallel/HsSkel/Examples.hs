@@ -122,12 +122,13 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
-                msF <- skMap $ skPar (\i -> let ((acx, acy), cont) = foldl foldAux ((0 :: Double, 0 :: Double ), 0 :: Integer) ptgs
-                                                foldAux ((acx, acy), count) ((x, y), i') = 
-                                                    if i == i' then 
-                                                         ((x + acx, y + acy), count + 1) 
-                                                    else ((acx, acy), count)
-                                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))) -<< [0 .. k - 1]
+                let aux i = let ((acx, acy), cont) = foldl foldAux ((0, 0), 0) ptgs
+                                foldAux ((acx, acy), count) ((x, y), i') = 
+                                    if i == i' then 
+                                         ((x + acx, y + acy), count + 1) 
+                                    else ((acx, acy), count)
+                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
+                msF <- skMap $ skPar aux -<< [0 .. k - 1]
                 skMap $ skSync -< msF
 
 data KMeansStopReason = ByStep | ByThreshold
