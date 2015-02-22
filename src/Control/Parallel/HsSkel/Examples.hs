@@ -16,13 +16,14 @@ import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
 
-import Prelude hiding (mapM, id, (.))
+import Data.Functor (fmap)
+import Data.Vector (Vector, concat, foldl1)
+
+import Prelude hiding ((.), concat, id, mapM, fmap, foldl1)
+import qualified Prelude as P
 
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
-
-import Data.List (groupBy, minimumBy, find, sortBy)
-import Data.Maybe (fromJust)
 
 import Debug.Trace (trace)
 
@@ -65,21 +66,23 @@ skMapSimple = proc l -> do
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
-skMapChunk :: Skel [Integer] [Integer]
+skMapChunk :: Skel [Integer] (Vector Integer)
 skMapChunk = proc l -> do
-    let st1 = stMap (skPar $ map doNothing) (stChunk 1000 (stFromList l))
+    let st1 = stMap (skPar $ fmap doNothing) (stChunk 1000 (stFromList l))
         st2 = stMap skSync st1
-    skRed (skSeq (\(o, i) -> i ++ o)) st2 -<< []
+    vecs <- skRed (skSeq (\(o, i) -> i:o)) st2 -<< []
+    skSeq concat -< vecs
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
 -- Ojo que desordena la lista!
 skMapChunkUnChunk :: Skel [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
-    let st1 = stMap (skPar $ map doNothing) (stChunk 1000 (stFromList l))
+    let st1 = stMap (skPar $ fmap doNothing) (stChunk 1000 (stFromList l))
         st2 = stMap skSync st1
         st3 = stUnChunk st2
     skRed (skSeq (\(o, i) -> i : o)) st3 -<< []
+    
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, skMap, skTraverseF
@@ -92,7 +95,7 @@ skMapSkelSimple = proc l -> do
 skVecProdChunk :: Skel ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st1 = stMap (skPar $ sum . map (uncurry (*))) (stChunk 10000000 (stFromList pairs))
+        st1 = stMap (skPar $ foldl1 (+) . fmap (uncurry (*))) (stChunk 10000000 (stFromList pairs))
         st2 = stMap skSync st1
     skRed (skSeq $ (uncurry (+))) st2 -<< 0
 
@@ -109,39 +112,25 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
         where
             -- A partir de los puntos y las medias calcula a que grupo (índice de ms) pertenece cada punto
             calcPointGroup = proc (ps, ms) -> do
-                let aux p = (p, 
-                            snd $ foldl1 
-                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i')) 
-                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
-
-                -- Sin usar streams
-                --ptgsF <- skMap $ skPar aux -<< ps
-                --skMap $ skSync -< ptgsF
-
-                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 2000 (stFromList ps)))
-
-                -- Sin usar chunk
-                --skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
-
-                -- Invierte la lista, pero no es problema
-                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
+               let aux p = (p,
+                           snd $ P.foldl1
+                               (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
+                               (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
+               let resChunk = stMap skSync (stMap (skPar $ fmap aux) (stChunk 2000 (stFromList ps)))
+               -- Invierte la lista, pero no es problema
+               skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
-                let aux i = let ((acx, acy), cont) = foldl foldAux ((0, 0), 0) ptgs
-                                foldAux ((acx, acy), count) ((x, y), i') = 
-                                    if i == i' then 
-                                         ((x + acx, y + acy), count + 1) 
-                                    else ((acx, acy), count)
-                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
-
-                -- Sin usar streams
-                --msF <- skMap $ skPar aux -<< [0 .. k - 1]
-                --skMap $ skSync -< msF
-
-                -- Usando streams con chunks
-                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 10 (stFromList [k - 1 .. 0])))
-                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
+               let aux i = let ((acx, acy), cont) = foldl foldAux ((0, 0), 0 :: Integer) ptgs
+                               foldAux ((acx, acy), count) ((x, y), i') =
+                                   if i == i' then
+                                        ((x + acx, y + acy), count + 1)
+                                   else ((acx, acy), count)
+                           in (acx / (fromIntegral cont), acy / (fromIntegral cont))
+               -- Usando streams con chunks
+               let resChunk = stMap skSync (stMap (skPar $ fmap aux) (stChunk 10 (stFromList [k - 1 .. 0])))
+               skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
 
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
@@ -179,14 +168,14 @@ execSkMapSimple = do
 execSkMapChunk :: IO()
 execSkMapChunk = do
     print "inicio: execSkMapChunk"
-    res <- exec skMapChunk (take 4000 $ repeat 1000000)
+    res <- exec skMapChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
 execSkMapChunkUnChunk :: IO()
 execSkMapChunkUnChunk = do
     print "inicio: execSkMapChunkUnChunk"
-    res <- exec skMapChunkUnChunk (take 4000 $ repeat 1000000)
+    res <- exec skMapChunkUnChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
@@ -226,8 +215,6 @@ execSkKMeansOneStep = do
 
     print "kMeansTestMauro"
     print $ kMeansTestMauro ps ms
-    print "kMeansTestPablo"
-    kMeansTestPablo ps ms >>= print 
     
 
 execSkKMeans :: IO()
@@ -260,9 +247,9 @@ kMeansTestMauro ps ms =
         sumPair (x, y) (x', y') = (x + x', y + y')
         divPair (x, y) d        = (x / d, y / d)
         distToMeans p           = map (\m -> (m, dist m p)) ms
-        closestMean p           = foldl1 (\a b -> if (snd a) < (snd b) then a else b) (distToMeans p)
+        closestMean p           = P.foldl1 (\a b -> if (snd a) < (snd b) then a else b) (distToMeans p)
         pointsWithMean          = map (\p -> (p, closestMean p)) ps
-        pointsWithMeanOfMean m  = filter (\(_, (m', _)) -> m == m') pointsWithMean
+        pointsWithMeanOfMean m  = P.filter (\(_, (m', _)) -> m == m') pointsWithMean
         calcNewMean m           = 
             let pointsWithMeanOfMeanLen = fromIntegral . length . pointsWithMeanOfMean $ m
                 sumPointsOfMean = foldl (\p (p', (_, _)) -> sumPair p p') (0, 0) (pointsWithMeanOfMean m)
@@ -271,46 +258,3 @@ kMeansTestMauro ps ms =
         calcNewMeans = map calcNewMean ms
     in calcNewMeans
 
-
-
-type Point = (Double, Double)
-type Mean = (Double, Double)
-type Distance = Double
-kMeansTestPablo :: [Point] -> [Mean] -> IO [Mean]
-kMeansTestPablo points means = do
-    let 
-        sqr :: Double -> Double
-        sqr a = a * a        
-        
-        fst3 (a, _, _) = a
-        snd3 (_, b, _) = b
-        trd3 (_, _, c) = c
-        
-        distance :: Point -> Point -> Distance
-        distance (a1, a2) (b1, b2) = sqrt (sqr (a1 - b1) + sqr (a2 - b2))
-        
-        distances :: [(Point, Mean, Distance)]
-        distances = concat $ map (\med -> [(x, med, distance x med) | x <- points]) means
-    
-        grouped :: [[(Point, Mean, Distance)]]
-        grouped = groupBy (\p1 p2 -> fst3 p1 == fst3 p2) $ sortBy (\p1 p2 -> compare (fst3 p1) (fst3 p2)) distances
-        
-        mins :: [(Point, Mean, Distance)]
-        mins = map (minimumBy (\p1 p2 -> compare (trd3 p1) (trd3 p2))) grouped
-        
-        groupedMeds :: [[(Point, Mean, Distance)]]
-        groupedMeds = groupBy (\p1 p2-> snd3 p1 == snd3 p2) $ sortBy (\p1 p2 -> compare (snd3 p1) (snd3 p2)) mins
-        
-        meds :: [(Mean, [Point])]
-        meds = map (\ls -> (snd3 $ head ls, map fst3 ls)) groupedMeds
-        
-        sumPair (a1, a2) (b1, b2) = (a1 + b1, a2 + b2)
-        dividePair (a1, a2) (b1, b2) = (a1 / b1, a2 / b2)
-        pair a = (a, a)
-        
-        newMeds :: [(Mean, Mean)]
-        newMeds = map (\(m, ls) -> (m, dividePair (foldl1 sumPair ls) (pair $ fromIntegral $ length ls))) meds
-
-        newMedsSorted :: [Mean]
-        newMedsSorted = map (\m -> snd $ fromJust $ find (\(m2, _) -> m == m2) newMeds) means
-    return newMedsSorted

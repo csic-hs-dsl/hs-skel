@@ -1,6 +1,4 @@
 - Que el generador pueda devolver futures.
-- Que los chunks sean vectores en lugar de listas.
-- Crear tests funcionales.
 - Revisar si podemos aplicar ideas de Reactive Streams (http://www.reactive-streams.org/) para no saturar a los consumidores lentos
 - Que el consumidor le pueda decir al productor que se detenga.
 	- Para esto además se podría generar un constructor nuevo (Stop?) que es el que decide cuando debe detenerse un stream en base a un acumulador y una condición dsobre lo acumulado.

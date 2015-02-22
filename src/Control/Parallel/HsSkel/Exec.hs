@@ -5,15 +5,21 @@ module Control.Parallel.HsSkel.Exec where
 
 import Control.Parallel.HsSkel.DSL
 
+import Data.Foldable (mapM_)
 import Data.Traversable (mapM)
+import Data.Vector (freeze)
+import Data.Vector.Mutable (new, write, take)
 import Control.Category ((.))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Concurrent.STM (readTBQueue, atomically, writeTBQueue, newTBQueueIO, TBQueue)
 import Control.DeepSeq (NFData, rnf)
 import Control.Exception (evaluate)
-import Control.Monad hiding (mapM)
-import Prelude hiding (mapM, id, (.))
+import Control.Monad (liftM)
+import Prelude hiding (id, mapM, mapM_, take, (.))
+
+
+--import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
 {- ================================================================== -}
 {- =========================== Auxiliary ============================ -}
@@ -58,32 +64,37 @@ execStream (StMap cons stream) = do
             res <- atomically $ readTBQueue qi
             case res of 
                 Just vi -> do 
-                    --print ("StMap inicio ")-- ++ show vi)
                     vo <- exec cons vi
-                    --print ("StMap fin ")-- ++ show vi)
                     atomically $ writeTBQueue qo (Just vo)
                     consumer qi qo
                 Nothing -> atomically $ writeTBQueue qo Nothing
 execStream (StChunk chunkSize stream) = do
     qo <- newTBQueueIO queueLimit
     qi <- execStream stream
-    _ <- forkIO $ recc qi qo [] 0
+    storage <- new chunkSize
+    _ <- forkIO $ recc qi qo storage 0
     return qo
     where 
-        recc qi qo ch cant = do
+        recc qi qo storage pos = do
             i <- atomically $ readTBQueue qi
             case i of
                 Just vi -> do
-                    let newCh = vi:ch
-                        newCant = cant + 1
+                    write storage pos vi
+                    let newCant = pos + 1
                     if (newCant == chunkSize) 
                         then do
-                            atomically $ writeTBQueue qo (Just $ reverse newCh)
-                            recc qi qo [] 0
+                            vector <- freeze storage
+                            atomically $ writeTBQueue qo (Just vector)
+                            recc qi qo storage 0
                         else do
-                            recc qi qo newCh newCant
+                            recc qi qo storage newCant
                 Nothing -> do
-                    atomically $ writeTBQueue qo (Just $ reverse ch)
+                    if (pos > 0)
+                        then do
+                            vector <- freeze $ take pos storage
+                            atomically $ writeTBQueue qo (Just vector)
+                        else
+                            return ()
                     atomically $ writeTBQueue qo Nothing
 execStream (StUnChunk stream) = do
     qo <- newTBQueueIO queueLimit
@@ -139,5 +150,6 @@ exec (SkRed red stream) = \z -> do
                 Just v -> do
                     z' <- exec red (z, v)
                     reducer q z'
-                Nothing -> return z  
+                Nothing -> do 
+                    return z
 
