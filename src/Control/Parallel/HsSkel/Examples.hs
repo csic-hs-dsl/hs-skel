@@ -11,7 +11,7 @@ module Control.Parallel.HsSkel.Examples (
     execSkKMeans
 ) where
 
-import Control.Arrow(returnA)
+import Control.Arrow(returnA, arr)
 import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
@@ -116,7 +116,9 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                 --ptgsF <- skMap $ skParFromFunc aux -<< ps
                 --skMap $ skSync -< ptgsF
                 let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 1000 (stFromList ps)))
-                skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
+                -- Invierte la lista, pero no es problema
+                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
+                --skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
