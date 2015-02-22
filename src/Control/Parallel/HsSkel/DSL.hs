@@ -68,7 +68,7 @@ data Skel i o where
     
     
 data Stream d where
-    StGen     :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
+    StGen     :: NFData o => (i -> (Maybe (o, i))) -> i -> Stream o
     StMap     :: Skel i o -> Stream i -> Stream o
     StChunk   :: Integer -> Stream i -> Stream [i]
     StUnChunk :: Stream [i] -> Stream i
