@@ -113,12 +113,18 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                             snd $ foldl1 
                                 (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i')) 
                                 (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
-                --ptgsF <- skMap $ skParFromFunc aux -<< ps
+
+                -- Sin usar streams
+                --ptgsF <- skMap $ skPar aux -<< ps
                 --skMap $ skSync -< ptgsF
-                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 1000 (stFromList ps)))
+
+                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 2000 (stFromList ps)))
+
+                -- Sin usar chunk
+                --skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
+
                 -- Invierte la lista, pero no es problema
                 skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
-                --skRed (skSeq (\(o, i) -> i ++ o)) resChunk -<< []
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
@@ -128,8 +134,14 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                          ((x + acx, y + acy), count + 1) 
                                     else ((acx, acy), count)
                             in (acx / (fromIntegral cont), acy / (fromIntegral cont))
-                msF <- skMap $ skPar aux -<< [0 .. k - 1]
-                skMap $ skSync -< msF
+
+                -- Sin usar streams
+                --msF <- skMap $ skPar aux -<< [0 .. k - 1]
+                --skMap $ skSync -< msF
+
+                -- Usando streams con chunks
+                let resChunk = stMap skSync (stMap (skPar $ map aux) (stChunk 10 (stFromList [k - 1 .. 0])))
+                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
 
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
