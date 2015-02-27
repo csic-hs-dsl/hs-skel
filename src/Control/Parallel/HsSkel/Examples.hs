@@ -6,6 +6,7 @@ module Control.Parallel.HsSkel.Examples (
     execSkMapChunk, 
     execSkMapChunkUnChunk,
     execSkMapChunkUnChunkStop,
+    execSkMapChunkUnChunkStopIneff,
     execSkMapSkelSimple, 
     execSkVecProdChunk, 
     execSkKMeansOneStep,
@@ -88,6 +89,15 @@ skMapChunkUnChunk = proc l -> do
 skMapChunkUnChunkStop :: Skel [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
     let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stStop (\acc _ -> acc + 1 :: Integer) 0 (== 500000) . stFromList $ l
+    skRed (arr (\(o, i) -> i : o)) st -<< []
+
+-- Este parece andar bien
+-- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Ojo que desordena la lista!
+-- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
+skMapChunkUnChunkStopIneff :: Skel [Integer] [Integer]
+skMapChunkUnChunkStopIneff = proc l -> do
+    let st = stStop (\acc _ -> acc + 1 :: Integer) 0 (== 500000) . stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
@@ -188,6 +198,13 @@ execSkMapChunkUnChunkStop :: IO()
 execSkMapChunkUnChunkStop = do
     print "inicio: execSkMapChunkUnChunkStop"
     res <- exec skMapChunkUnChunkStop (repeat 5000)
+    print "fin"
+    print res
+
+execSkMapChunkUnChunkStopIneff :: IO()
+execSkMapChunkUnChunkStopIneff = do
+    print "inicio: execSkMapChunkUnChunkStopIneff"
+    res <- exec skMapChunkUnChunkStopIneff (repeat 5000)
     print "fin"
     print res
 
