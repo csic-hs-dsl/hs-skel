@@ -1,21 +1,23 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Control.Parallel.HsSkel.Test.QuickCheck
+module Main (
+    main
+    )
 where
 
 import Control.Arrow (arr)
 import Control.Category ((.))
 import Control.DeepSeq (NFData)
-import Control.Monad.State (State, StateT, evalStateT, get, modify)
+import Control.Monad.State (StateT, evalStateT, get, modify)
 import Control.Monad.Trans (liftIO)
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec (exec)
 
-import Data.Vector (Vector, toList)
+import Data.Vector (toList)
 
 import System.IO.Unsafe (unsafePerformIO)
 
-import Test.QuickCheck (Arbitrary(arbitrary), CoArbitrary(coarbitrary), Property, Testable, quickCheckResult)
+import Test.QuickCheck (Arbitrary(arbitrary), CoArbitrary(), Property, Testable, quickCheckResult)
 import Test.QuickCheck.Gen (Gen, choose, vectorOf)
 import Test.QuickCheck.Test (Result(..), isSuccess)
 import Test.QuickCheck.Monadic (assert, monadicIO, run)
@@ -30,7 +32,7 @@ data FunTest a b = FunTest (a -> b) [a]
 instance (Show a, Show b) => Show (FunTest a b) where
     show (FunTest f is) = "FunTest [" ++ showFunction f is ++ "]"
         where 
-            showFunction f [] = ""
+            showFunction _ [] = ""
             showFunction f [x] = showValue f x
             showFunction f (x:xs) = showValue f x ++ ", " ++ showFunction f xs
             showValue f x = show x ++ "->" ++ show (f x)
@@ -83,10 +85,11 @@ appendResult n r = modify (\s -> s ++ [(n, r)])
 testWith :: Testable prop => (String, t) -> [(String, t -> prop)] -> Results
 testWith (name, fun) props = do 
     liftIO $ putStr "Testing: " >> putStrLn name
-    let runTest (testName, prop) = do
-        putStr "+" >> putStrLn testName
-        result <- quickCheckResult (prop fun)
-        return (testName ++ "(" ++ name ++ ")", result)
+    let 
+        runTest (testName, prop) = do
+            putStr "+" >> putStrLn testName
+            result <- quickCheckResult (prop fun)
+            return (testName ++ "(" ++ name ++ ")", result)
     results <- liftIO $ (mapM runTest props)
     mapM_ (uncurry appendResult) results
 
@@ -198,25 +201,29 @@ testExecStUnchunkIsOk = do
 
 execAllTests :: IO ()
 execAllTests = do
-    let allTests = do
-        testWithReverse
-        testWithPlus2
-        testExecSkelVsArbFunIsOk ("arr", arr)
-        testExecSkelVsArbFunIsOk ("skSeq", skSeq)
-        testExecSkelVsArbFunIsOk ("skSync . skPar", \f -> skSync . skPar f)
-        testExecSkelVsArbFunIsOk ("skSync . skPar skSeq", \f -> skSync . skPar (skSeq f))
-        testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel Int Int))
-        testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel Int Int))
-        testExecSkRedIsOk
-        testExecStMapIsOk
-        testExecStChunkIsOk
-        testExecStUnchunkIsOk
+    let 
+        allTests = do
+            testWithReverse
+            testWithPlus2
+            testExecSkelVsArbFunIsOk ("arr", arr)
+            testExecSkelVsArbFunIsOk ("skSeq", skSeq)
+            testExecSkelVsArbFunIsOk ("skSync . skPar", \f -> skSync . skPar f)
+            testExecSkelVsArbFunIsOk ("skSync . skPar skSeq", \f -> skSync . skPar (skSeq f))
+            testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel Int Int))
+            testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel Int Int))
+            testExecSkRedIsOk
+            testExecStMapIsOk
+            testExecStChunkIsOk
+            testExecStUnchunkIsOk
     results <- evalStateT (allTests >> get) []
     let errors = filter (not . isSuccess . snd) results
         cntErr = length errors
     print errors
-    if cntErr > 0 then
-        fail $ "There was " ++ show cntErr ++ " errors!"
-    else
-        return ()
+    if cntErr > 0 
+        then
+            fail $ "There was " ++ show cntErr ++ " errors!"
+        else
+            return ()
 
+main :: IO ()
+main = execAllTests

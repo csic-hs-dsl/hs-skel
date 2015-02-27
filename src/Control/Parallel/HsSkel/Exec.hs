@@ -154,12 +154,13 @@ execStream (StStop f z cond stream) = do
                     case i of
                         Just vi -> do
                             let acc' = f acc vi
-                            if cond acc' then do
-                                atomically $ writeTBQueue bqo Stop
-                                atomically $ writeTBQueue qo Nothing
-                            else do
-                                atomically $ writeTBQueue qo (Just vi)
-                                recc qi qo bqi bqo acc'
+                            if cond acc' 
+                                then do
+                                    atomically $ writeTBQueue bqo Stop
+                                    atomically $ writeTBQueue qo Nothing
+                                else do
+                                    atomically $ writeTBQueue qo (Just vi)
+                                    recc qi qo bqi bqo acc'
                         Nothing -> do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo

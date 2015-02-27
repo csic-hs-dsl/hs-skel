@@ -16,7 +16,7 @@ copyright:      Universidad de la República, Uruguay
 
 library
   hs-source-dirs:   src
-  build-depends:    base >= 4.7 && < 5, stm, deepseq, primes, random, tf-random, vector
+  build-depends:    base >= 4.7 && < 5, stm, deepseq, random, tf-random, vector
   ghc-options:      -Wall -fno-warn-orphans -fno-warn-name-shadowing
   default-Language: Haskell2010
   exposed-modules: 
@@ -25,3 +25,10 @@ library
                     Control.Parallel.HsSkel.Exec
                     Control.Parallel.HsSkel.Examples
 
+test-suite test-hs-skel
+  hs-source-dirs:  src-test
+  build-depends:   base >= 4.7 && < 5, hs-skel, deepseq, vector, mtl, QuickCheck
+  ghc-options:     -Wall -fno-warn-orphans -fno-warn-name-shadowing
+  default-Language: Haskell2010
+  type:            exitcode-stdio-1.0
+  main-is:         QuickCheck.hs
