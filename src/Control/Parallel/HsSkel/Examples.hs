@@ -69,8 +69,9 @@ skMapSimple = proc l -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: Skel [Integer] (Vector Integer)
 skMapChunk = proc l -> do
-    let st = stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stFromList $ l
-    vecs <- skRed (skSeq (\(o, i) -> i:o)) st -<< []
+    let st1 = stMap (skPar $ fmap doNothing) (stChunk 1000 (stFromList l))
+        st2 = stMap skSync st1
+    vecs <- skRed (skSeq (\(o, i) -> i : o)) st2 -<< []
     skSeq concat -< vecs
 
 -- Este parece andar bien
@@ -118,7 +119,9 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                            snd $ P.foldl1
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
+
                let resChunk = stMap skSync . stMap (skPar $ fmap aux) . stChunk 2000 . stFromList $ ps
+
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
 
