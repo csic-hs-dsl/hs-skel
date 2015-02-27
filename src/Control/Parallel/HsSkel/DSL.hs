@@ -20,6 +20,7 @@ module Control.Parallel.HsSkel.DSL (
     stMap,
     stChunk,
     stUnChunk,
+    stStop,
     stFromList,
     -- Utils:
     skConst,
@@ -30,11 +31,12 @@ module Control.Parallel.HsSkel.DSL (
 ) where
 
 import Data.Traversable (Traversable)
+import Data.Vector (Vector)
 import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right, (+++)), ArrowApply(app), returnA)
 import Control.Category (Category, id, (.))
 import Control.Concurrent.MVar (MVar)
 import Control.DeepSeq (NFData, rnf)
-import Prelude hiding (mapM, id, (.))
+import Prelude (Bool, Either, Int, Maybe(Just, Nothing), Show(show), ($))
 
 {- ================================================================== -}
 {- ============================= Types ============================== -}
@@ -53,7 +55,7 @@ infixl 8 `SkPair`
 
 data Skel i o where
     SkSeq   :: (NFData o) => (i -> o) -> Skel i o
-    SkSeq_  :: (i -> o) -> Skel i o -- Use with caution!
+    SkSeq_  :: (i -> o) -> Skel i o
     
     SkPar   :: Skel i o -> Skel i (Future o)
     SkSync  :: Skel (Future i) i
@@ -70,8 +72,9 @@ data Skel i o where
 data Stream d where
     StGen     :: NFData o => (i -> (Maybe (o, i))) -> i -> Stream o
     StMap     :: Skel i o -> Stream i -> Stream o
-    StChunk   :: Integer -> Stream i -> Stream [i]
-    StUnChunk :: Stream [i] -> Stream i
+    StChunk   :: Int -> Stream i -> Stream (Vector i)
+    StUnChunk :: Stream (Vector i) -> Stream i
+    StStop    :: (c -> i -> c) -> c -> (c -> Bool) -> Stream i -> Stream i
 
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
@@ -123,11 +126,14 @@ stGen = StGen
 stMap :: Skel i o -> Stream i -> Stream o
 stMap = StMap
 
-stChunk :: Integer -> Stream i -> Stream [i]
+stChunk :: Int -> Stream i -> Stream (Vector i)
 stChunk = StChunk
 
-stUnChunk :: Stream [i] -> Stream i
+stUnChunk :: Stream (Vector i) -> Stream i
 stUnChunk = StUnChunk
+
+stStop :: (c -> i -> c) -> c -> (c -> Bool) -> Stream i -> Stream i
+stStop = StStop
 
 stFromList :: (NFData a) => [a] -> Stream a
 stFromList l = StGen go l
