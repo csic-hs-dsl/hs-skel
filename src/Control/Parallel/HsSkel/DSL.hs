@@ -120,9 +120,6 @@ skMap = SkMap
 skRed :: Skel (o, i) o -> Stream i -> Skel o o
 skRed = SkRed
 
-stGen :: (NFData i, NFData o) => (i -> (Maybe (o, i))) -> i -> Stream o
-stGen = StGen
-
 stMap :: Skel i o -> Stream i -> Stream o
 stMap = StMap
 
@@ -150,6 +147,14 @@ instance SkParSupport Skel i o where
 instance NFData o => SkParSupport (->) i o where
     skPar = skPar . skSeq
 
+class StGenSupport f i o where
+    stGen :: f -> i -> Stream o
+
+instance NFData o => StGenSupport (i -> (Maybe (o, i))) i o where
+    stGen = StGen
+
+instance NFData o => StGenSupport (i -> (o, i)) i o where
+    stGen f = StGen (Just . f)
 
 {- ================================================================== -}
 {- ========================= Util Functions ========================= -}

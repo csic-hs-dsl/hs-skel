@@ -1,3 +1,2 @@
 - Que el generador pueda devolver futures.
 - Revisar si podemos aplicar ideas de Reactive Streams (http://www.reactive-streams.org/) para no saturar a los consumidores lentos
-- Considerando que tenemos el Stop, se podría hacer un generador que no use maybe, y sea entonces siempre infinito
