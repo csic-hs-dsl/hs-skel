@@ -3,3 +3,7 @@
 - Agregar test de quickcheck para stStop y el stGen infinito
 - Que el stGen reciba el tamaño de la cola, y el resto de las composiciones la infiera
 - Podría ser útil una operación de stSplit :: Stream i -> (Stream i, Stream i) ? La idea sería poder duplicar colas, sin duplicar la generacion de elementos
+- Se podría probar implementar los Streams usando unagi-chan (https://hackage.haskell.org/package/unagi-chan)
+- Hacer algo para forzar que el nombre de la operación ejecutora del motor se tenga que llamar exec (o algo definido)
+- Que el stChunk no le permita al usuario saber que usamos Vector y no permitirle manipularlo
+- Poder distinguir entre streams (posiblemente) finitos e infinitos segun el tipo, y que el skRed solo funcione con streams finitos
