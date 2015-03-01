@@ -1,3 +1,5 @@
 - Que el generador pueda devolver futures.
 - Revisar si podemos aplicar ideas de Reactive Streams (http://www.reactive-streams.org/) para no saturar a los consumidores lentos
 - Agregar test de quickcheck para stStop y el stGen infinito
+- Que el stGen reciba el tamaño de la cola, y el resto de las composiciones la infiera
+- Podría ser útil una operación de stSplit :: Stream i -> (Stream i, Stream i) ? La idea sería poder duplicar colas, sin duplicar la generacion de elementos

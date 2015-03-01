@@ -152,7 +152,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                    else ((acx, acy), count)
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
-               let resChunk = stMap skSync . stMap (skPar $ fmap aux) . stChunk 10 . stFromList $ reverse [0 .. k - 1]
+               let resChunk = stMap skSync . stMap (skPar $ fmap aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
                skRed (arr (\(o, i) -> i : o)) (stUnChunk resChunk) -<< []
 
 data KMeansStopReason = ByStep | ByThreshold

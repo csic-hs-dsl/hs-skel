@@ -1,7 +1,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Arrows #-}
 
-module Control.Parallel.HsSkel.Exec where
+module Control.Parallel.HsSkel.Exec (
+    exec
+    ) where
 
 import Control.Parallel.HsSkel.DSL
 
@@ -26,7 +28,7 @@ import Prelude hiding (id, mapM, mapM_, take, (.))
 {- ================================================================== -}
 
 queueLimit :: Int
-queueLimit = 100000
+queueLimit = 1000
 
 eval :: (NFData a) => a -> IO a
 eval a = do
