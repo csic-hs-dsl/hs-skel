@@ -1,2 +1,3 @@
 - Que el generador pueda devolver futures.
 - Revisar si podemos aplicar ideas de Reactive Streams (http://www.reactive-streams.org/) para no saturar a los consumidores lentos
+- Agregar test de quickcheck para stStop y el stGen infinito
