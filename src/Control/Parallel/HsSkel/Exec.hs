@@ -142,7 +142,7 @@ execStream (StUnChunk stream) = do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream (StStop f z cond stream) = do
+execStream (StStop skF z skCond stream) = do
     qo <- newTBQueueIO queueLimit
     bqi <- newTBQueueIO queueLimit
     (qi, bqo) <- execStream stream
@@ -155,8 +155,9 @@ execStream (StStop f z cond stream) = do
                     i <- atomically $ readTBQueue qi
                     case i of
                         Just vi -> do
-                            let acc' = f acc vi
-                            if cond acc' 
+                            acc' <- exec skF (acc, vi)
+                            cond <- exec skCond acc'
+                            if cond
                                 then do
                                     atomically $ writeTBQueue bqo Stop
                                     atomically $ writeTBQueue qo Nothing

@@ -88,7 +88,7 @@ skMapChunkUnChunk = proc l -> do
 -- Ojo que desordena la lista!
 skMapChunkUnChunkStop :: Skel [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
-    let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stStop (\acc _ -> acc + 1 :: Integer) 0 (== 500000) . stGen listGen $ l
+    let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -101,7 +101,7 @@ skMapChunkUnChunkStop = proc l -> do
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
 skMapChunkUnChunkStopIneff :: Skel [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
-    let st = stStop (\acc _ -> acc + 1 :: Integer) 0 (== 500000) . stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stGen listGen $ l
+    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])

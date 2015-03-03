@@ -74,7 +74,7 @@ data Stream d where
     StMap     :: Skel i o -> Stream i -> Stream o
     StChunk   :: Int -> Stream i -> Stream (Vector i)
     StUnChunk :: Stream (Vector i) -> Stream i
-    StStop    :: (c -> i -> c) -> c -> (c -> Bool) -> Stream i -> Stream i
+    StStop    :: Skel (c, i) c -> c -> Skel c Bool -> Stream i -> Stream i
 
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
@@ -129,7 +129,7 @@ stChunk = StChunk
 stUnChunk :: Stream (Vector i) -> Stream i
 stUnChunk = StUnChunk
 
-stStop :: (c -> i -> c) -> c -> (c -> Bool) -> Stream i -> Stream i
+stStop :: Skel (c, i) c -> c -> Skel c Bool -> Stream i -> Stream i
 stStop = StStop
 
 stFromList :: (NFData a) => [a] -> Stream a
