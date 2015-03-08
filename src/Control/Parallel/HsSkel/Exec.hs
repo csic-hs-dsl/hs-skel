@@ -192,7 +192,7 @@ exec (SkPair sk1 sk2) = \(i1, i2) -> do
     o2 <- exec sk2 i2
     return (o1, o2)
 exec (SkMap s) = mapM (exec s)
-exec (SkIf sl sr) = \input ->
+exec (SkChoice sl sr) = \input ->
     case input of
         Left i -> exec sl i >>= return . Left
         Right i -> exec sr i >>= return . Right
