@@ -174,59 +174,62 @@ skKMeans = proc ((ps, ms), k, threshold, step) -> do
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
 
+defaultIOEC :: IOEC
+defaultIOEC = IOEC 1000
+
 execSkParSimple :: IO()
 execSkParSimple = do
     print "inicio: execSkParSimple"
-    res <- exec skParSimple (1000000000)
+    res <- exec defaultIOEC skParSimple (1000000000)
     print "fin"
     print res
 
 execSkMapSimple :: IO()
 execSkMapSimple = do
     print "inicio: execSkMapSimple"
-    res <- exec skMapSimple [1000000000, 1000000000, 1000000000, 1000000000]
+    res <- exec defaultIOEC skMapSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
 execSkMapChunk :: IO()
 execSkMapChunk = do
     print "inicio: execSkMapChunk"
-    res <- exec skMapChunk (take 500000 $ repeat 5000)
+    res <- exec defaultIOEC skMapChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
 execSkMapChunkUnChunk :: IO()
 execSkMapChunkUnChunk = do
     print "inicio: execSkMapChunkUnChunk"
-    res <- exec skMapChunkUnChunk (take 500000 $ repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
 execSkMapChunkUnChunkStop :: IO()
 execSkMapChunkUnChunkStop = do
     print "inicio: execSkMapChunkUnChunkStop"
-    res <- exec skMapChunkUnChunkStop (repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunkStop (repeat 5000)
     print "fin"
     print res
 
 execSkMapChunkUnChunkStopIneff :: IO()
 execSkMapChunkUnChunkStopIneff = do
     print "inicio: execSkMapChunkUnChunkStopIneff"
-    res <- exec skMapChunkUnChunkStopIneff (repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunkStopIneff (repeat 5000)
     print "fin"
     print res
 
 execSkMapSkelSimple :: IO()
 execSkMapSkelSimple = do
     print "inicio: execSkMapSkelSimple"
-    res <- exec skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
+    res <- exec defaultIOEC skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
 execSkVecProdChunk :: IO()
 execSkVecProdChunk = do
     print "inicio: execSkVecProdChunk"
-    res <- exec skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
+    res <- exec defaultIOEC skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
     print "fin"
     print res
 
@@ -246,7 +249,7 @@ execSkKMeansOneStep = do
     print ps
     print "ms: "
     print ms
-    resSk <- exec skKMeansOneStep ((ps, ms), fromIntegral k)
+    resSk <- exec defaultIOEC skKMeansOneStep ((ps, ms), fromIntegral k)
     print "fin"
     print resSk
 
@@ -270,7 +273,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
+    resSk <- exec defaultIOEC skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 

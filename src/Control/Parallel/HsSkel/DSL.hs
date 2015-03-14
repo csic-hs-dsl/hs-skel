@@ -2,6 +2,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 -- | This module defines the DSL to construct Streams and Skeletons.
@@ -10,6 +11,8 @@ module Control.Parallel.HsSkel.DSL (
     Future(..),
     Skel(..),
     Stream(..),
+    -- * Execution
+    ExecutionContext(exec),
     -- * Skeleton Smart Constructors
     skSeq,
     SkParSupport(skPar),
@@ -38,6 +41,7 @@ import Control.Category (Category, id, (.))
 import Control.Concurrent.MVar (MVar)
 import Control.DeepSeq (NFData)
 import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($))
+
 
 {- ================================================================== -}
 {- ============================= Types ============================== -}
@@ -97,6 +101,7 @@ data Stream d where
     StChunk   :: Int -> Stream i -> Stream (Vector i)
     StUnChunk :: Stream (Vector i) -> Stream i
     StStop    :: Skel (c, i) c -> c -> Skel c Bool -> Stream i -> Stream i
+
 
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
@@ -209,6 +214,15 @@ instance NFData o => StGenSupport (i -> (Maybe (o, i))) i o where
 
 instance NFData o => StGenSupport (i -> (o, i)) i o where
     stGen f = StGen (Just . f)
+
+
+{- ================================================================== -}
+{- ======================= Execution Context ======================== -}
+{- ================================================================== -}
+
+class ExecutionContext ec m | m -> ec where
+    exec :: ec -> Skel i o -> i -> m o
+
 
 {- ================================================================== -}
 {- ========================= Util Functions ========================= -}

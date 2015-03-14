@@ -1,9 +1,11 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 module Control.Parallel.HsSkel.Exec (
-    exec
-    ) where
+    IOEC(..)
+) where
 
 import Control.Parallel.HsSkel.DSL
 
@@ -23,12 +25,14 @@ import Prelude hiding (id, mapM, mapM_, take, (.))
 
 --import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
+data IOEC = IOEC { queueLimit :: Int }
+
+instance ExecutionContext IOEC IO where
+    exec = execIO
+
 {- ================================================================== -}
 {- =========================== Auxiliary ============================ -}
 {- ================================================================== -}
-
-queueLimit :: Int
-queueLimit = 1000
 
 eval :: (NFData a) => a -> IO a
 eval a = do
@@ -49,10 +53,10 @@ handleBackMsg continue bqi bqo = do
 {- ======================= Stream Execution ========================= -}
 {- ================================================================== -}
 
-execStream :: Stream i -> IO (TBQueue (Maybe i), TBQueue BackMsg)
-execStream (StGen gen i) = do
-    qo <- newTBQueueIO queueLimit
-    bqi <- newTBQueueIO queueLimit
+execStream :: IOEC -> Stream i -> IO (TBQueue (Maybe i), TBQueue BackMsg)
+execStream ec (StGen gen i) = do
+    qo <- newTBQueueIO (queueLimit ec)
+    bqi <- newTBQueueIO (queueLimit ec)
     _ <- forkIO $ recc qo bqi i
     return (qo, bqi)
     where 
@@ -71,10 +75,10 @@ execStream (StGen gen i) = do
 
 --execStream (StMap (StMap stream' cons') cons) =  execStream (StMap stream' (cons . cons'))
 
-execStream (StMap cons stream) = do
-    qo <- newTBQueueIO queueLimit
-    bqi <- newTBQueueIO queueLimit
-    (qi, bqo) <- execStream stream
+execStream ec (StMap cons stream) = do
+    qo <- newTBQueueIO (queueLimit ec)
+    bqi <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
     _ <- forkIO $ recc qi qo bqi bqo
     return (qo, bqi)
     where 
@@ -84,16 +88,16 @@ execStream (StMap cons stream) = do
                     res <- atomically $ readTBQueue qi
                     case res of 
                         Just vi -> do 
-                            vo <- exec cons vi
+                            vo <- exec ec cons vi
                             atomically $ writeTBQueue qo (Just vo)
                             recc qi qo bqi bqo
                         Nothing -> atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream (StChunk chunkSize stream) = do
-    qo <- newTBQueueIO queueLimit
-    bqi <- newTBQueueIO queueLimit
-    (qi, bqo) <- execStream stream
+execStream ec (StChunk chunkSize stream) = do
+    qo <- newTBQueueIO (queueLimit ec)
+    bqi <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
     storage <- new chunkSize
     _ <- forkIO $ recc qi qo bqi bqo storage 0
     return (qo, bqi)
@@ -123,10 +127,10 @@ execStream (StChunk chunkSize stream) = do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream (StUnChunk stream) = do
-    qo <- newTBQueueIO queueLimit
-    bqi <- newTBQueueIO queueLimit
-    (qi, bqo) <- execStream stream
+execStream ec (StUnChunk stream) = do
+    qo <- newTBQueueIO (queueLimit ec)
+    bqi <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
     _ <- forkIO $ recc qi qo bqi bqo
     return (qo, bqi)
     where 
@@ -142,10 +146,10 @@ execStream (StUnChunk stream) = do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream (StStop skF z skCond stream) = do
-    qo <- newTBQueueIO queueLimit
-    bqi <- newTBQueueIO queueLimit
-    (qi, bqo) <- execStream stream
+execStream ec (StStop skF z skCond stream) = do
+    qo <- newTBQueueIO (queueLimit ec)
+    bqi <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
     _ <- forkIO $ recc qi qo bqi bqo z
     return (qo, bqi)
     where 
@@ -155,8 +159,8 @@ execStream (StStop skF z skCond stream) = do
                     i <- atomically $ readTBQueue qi
                     case i of
                         Just vi -> do
-                            acc' <- exec skF (acc, vi)
-                            cond <- exec skCond acc'
+                            acc' <- exec ec skF (acc, vi)
+                            cond <- exec ec skCond acc'
                             if cond
                                 then do
                                     atomically $ writeTBQueue bqo Stop
@@ -172,40 +176,38 @@ execStream (StStop skF z skCond stream) = do
 {- ======================== Skel Execution ========================== -}
 {- ================================================================== -}
 
-exec :: Skel i o -> i -> IO o
-exec (SkSeq f) = (eval =<<) . liftM f . return
-exec (SkSeq_ f) = liftM f . return
-exec (SkPar sk) = \i -> (do
+execIO :: IOEC -> Skel i o -> i -> IO o
+execIO ec (SkSeq f) = (eval =<<) . liftM f . return
+execIO ec (SkSeq_ f) = liftM f . return
+execIO ec (SkPar sk) = \i -> (do
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)
     return $ Future mVar)
     where
         stuff i mVar = do
-            --print ("SkPar inicio " ++ show i)
-            r <- exec sk i
-            --print ("SkPar fin " ++ show i)
+            r <- exec ec sk i
             putMVar mVar r
-exec (SkSync) = takeMVar . mvar
-exec (SkComp s2 s1) = (exec s2 =<<) . exec s1
-exec (SkPair sk1 sk2) = \(i1, i2) -> do
-    o1 <- exec sk1 i1
-    o2 <- exec sk2 i2
+execIO ec (SkSync) = takeMVar . mvar
+execIO ec (SkComp s2 s1) = (exec ec s2 =<<) . exec ec s1
+execIO ec (SkPair sk1 sk2) = \(i1, i2) -> do
+    o1 <- exec ec sk1 i1
+    o2 <- exec ec sk2 i2
     return (o1, o2)
-exec (SkMap s) = mapM (exec s)
-exec (SkChoice sl sr) = \input ->
+execIO ec (SkMap s) = mapM (exec ec s)
+execIO ec (SkChoice sl sr) = \input ->
     case input of
-        Left i -> exec sl i >>= return . Left
-        Right i -> exec sr i >>= return . Right
-exec (SkApply) = \(sk, i) -> exec sk i
-exec (SkRed red stream) = \z -> do
-    (qi, _) <- execStream stream   
+        Left i -> exec ec sl i >>= return . Left
+        Right i -> exec ec sr i >>= return . Right
+execIO ec (SkApply) = \(sk, i) -> exec ec sk i
+execIO ec (SkRed red stream) = \z -> do
+    (qi, _) <- execStream ec stream   
     reducer qi z
     where 
         reducer qi z = do
             res <- atomically $ readTBQueue qi
             case res of
                 Just v -> do
-                    z' <- exec red (z, v)
+                    z' <- exec ec red (z, v)
                     reducer qi z'
                 Nothing -> do 
                     return z

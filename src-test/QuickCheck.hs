@@ -2,8 +2,7 @@
 
 module Main (
     main
-    )
-where
+) where
 
 import Control.Arrow (arr)
 import Control.Category ((.))
@@ -11,7 +10,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad.State (StateT, evalStateT, get, modify)
 import Control.Monad.Trans (liftIO)
 import Control.Parallel.HsSkel
-import Control.Parallel.HsSkel.Exec (exec)
+import Control.Parallel.HsSkel.Exec
 
 import Data.Vector (toList)
 
@@ -72,7 +71,7 @@ propOnIO :: IO Bool -> Property
 propOnIO code = monadicIO $ assert =<< run code
 
 streamToList :: Stream o -> IO [o]
-streamToList stream = exec (skRed (arr $ \(o, i) -> i:o) stream) [] >>= return . reverse
+streamToList stream = exec defaultIOEC (skRed (arr $ \(o, i) -> i:o) stream) [] >>= return . reverse
 
 
 type StateWithIO s a = StateT s IO a
@@ -95,16 +94,18 @@ testWith (name, fun) props = do
 
 {-- ================================================================ --}
 {-- ================================================================ --}
+defaultIOEC :: IOEC
+defaultIOEC = IOEC 1000
 
 propExecSkelVsArbFunIsOk :: (Arbitrary i, CoArbitrary i, Arbitrary o, Eq o) => ((i -> o) -> Skel i o) -> FunTest i o -> Property
 propExecSkelVsArbFunIsOk skel (FunTest f is) = propOnIO $ do
-    res1 <- mapM (exec (skel f)) is
+    res1 <- mapM (exec defaultIOEC (skel f)) is
     let res2 = map f is
     return (res1 == res2)
 
 propExecSkelVsFunIsOk :: (Eq o) => ((i -> o) -> Skel i o) -> (i -> o) -> i -> Property
 propExecSkelVsFunIsOk skel f i = propOnIO $ do
-    res1 <- exec (skel f) i
+    res1 <- exec defaultIOEC (skel f) i
     let res2 = f i
     return (res1 == res2)
 
