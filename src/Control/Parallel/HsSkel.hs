@@ -3,6 +3,7 @@ module Control.Parallel.HsSkel (
     Future(),
     Skel(),
     Stream(),
+    ExecutionContext(exec),
     -- Constructors:
     skSeq,
     skPar,

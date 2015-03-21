@@ -1,4 +1,5 @@
 {-# LANGUAGE Arrows #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Parallel.HsSkel.Examples (
     execSkParSimple, 
@@ -46,12 +47,12 @@ doNothing n = if n <= 0
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync
-skParSimple :: Skel Integer (Integer, Integer, Integer, Integer)
+skParSimple :: (Future f) => Skel f Integer (Integer, Integer, Integer, Integer)
 skParSimple = proc a -> do
-    a' <- skPar (skSeq doNothing) -< a
-    b' <- skPar (skSeq doNothing) -< a
-    c' <- skPar (skSeq doNothing) -< a
-    d' <- skPar (skSeq doNothing) -< a
+    a' <- (skPar doNothing) -< a
+    b' <- (skPar doNothing) -< a
+    c' <- (skPar doNothing) -< a
+    d' <- (skPar doNothing) -< a
     a'' <- skSync -< a'
     b'' <- skSync -< b'
     c'' <- skSync -< c'
@@ -60,7 +61,7 @@ skParSimple = proc a -> do
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList
-skMapSimple :: Skel [Integer] [Integer]
+skMapSimple :: (Future f) => Skel f [Integer] [Integer]
 skMapSimple = proc l -> do
     let st1 = stMap (skPar doNothing) (stFromList l)
         st2 = stMap skSync st1
@@ -68,7 +69,7 @@ skMapSimple = proc l -> do
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
-skMapChunk :: Skel [Integer] (Vector Integer)
+skMapChunk :: (Future f) => Skel f [Integer] (Vector Integer)
 skMapChunk = proc l -> do
     let st1 = stMap (skPar $ fmap doNothing) (stChunk 1000 (stFromList l))
         st2 = stMap skSync st1
@@ -78,7 +79,7 @@ skMapChunk = proc l -> do
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
 -- Ojo que desordena la lista!
-skMapChunkUnChunk :: Skel [Integer] [Integer]
+skMapChunkUnChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
     let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
@@ -86,7 +87,7 @@ skMapChunkUnChunk = proc l -> do
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
-skMapChunkUnChunkStop :: Skel [Integer] [Integer]
+skMapChunkUnChunkStop :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
     let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
@@ -99,7 +100,7 @@ skMapChunkUnChunkStop = proc l -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
-skMapChunkUnChunkStopIneff :: Skel [Integer] [Integer]
+skMapChunkUnChunkStopIneff :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
     let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
@@ -110,13 +111,13 @@ skMapChunkUnChunkStopIneff = proc l -> do
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, skMap, skTraverseF
-skMapSkelSimple :: Skel [Integer] [Integer]
+skMapSkelSimple :: (Future f) => Skel f [Integer] [Integer]
 skMapSkelSimple = proc l -> do 
     lf <- skMap (skPar doNothing) -< l
     skSync . skTraverseF -< lf
 
 -- Este no anda bien
-skVecProdChunk :: Skel ([Double], [Double]) Double
+skVecProdChunk :: (Future f) => Skel f ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
         st = stMap skSync . stMap (skPar $ foldl1 (+) . fmap (uncurry (*))) . stChunk 10000000 . stFromList $ pairs
@@ -125,7 +126,7 @@ skVecProdChunk = proc (vA, vB) -> do
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
-skKMeansOneStep :: Skel (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
+skKMeansOneStep :: (Future f) => Skel f (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
 skKMeansOneStep = proc ((ps, ms), k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
@@ -158,7 +159,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
             
-skKMeans :: Skel (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans :: (Future f) => Skel f (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
 skKMeans = proc ((ps, ms), k, threshold, step) -> do
     ms' <- skKMeansOneStep -< ((ps, ms), k)
     let epsilon = trace ("step: " ++ show step) $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
@@ -174,63 +175,66 @@ skKMeans = proc ((ps, ms), k, threshold, step) -> do
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
 
-execSkParSimple :: IO()
+defaultIOEC :: IOEC
+defaultIOEC = IOEC 1000
+
+execSkParSimple :: IO ()
 execSkParSimple = do
     print "inicio: execSkParSimple"
-    res <- exec skParSimple (1000000000)
+    res <- exec defaultIOEC skParSimple (1000000000)
     print "fin"
     print res
 
-execSkMapSimple :: IO()
+execSkMapSimple :: IO ()
 execSkMapSimple = do
     print "inicio: execSkMapSimple"
-    res <- exec skMapSimple [1000000000, 1000000000, 1000000000, 1000000000]
+    res <- exec defaultIOEC skMapSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
-execSkMapChunk :: IO()
+execSkMapChunk :: IO ()
 execSkMapChunk = do
     print "inicio: execSkMapChunk"
-    res <- exec skMapChunk (take 500000 $ repeat 5000)
+    res <- exec defaultIOEC skMapChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
-execSkMapChunkUnChunk :: IO()
+execSkMapChunkUnChunk :: IO ()
 execSkMapChunkUnChunk = do
     print "inicio: execSkMapChunkUnChunk"
-    res <- exec skMapChunkUnChunk (take 500000 $ repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunk (take 500000 $ repeat 5000)
     print "fin"
     print res
 
-execSkMapChunkUnChunkStop :: IO()
+execSkMapChunkUnChunkStop :: IO ()
 execSkMapChunkUnChunkStop = do
     print "inicio: execSkMapChunkUnChunkStop"
-    res <- exec skMapChunkUnChunkStop (repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunkStop (repeat 5000)
     print "fin"
     print res
 
-execSkMapChunkUnChunkStopIneff :: IO()
+execSkMapChunkUnChunkStopIneff :: IO ()
 execSkMapChunkUnChunkStopIneff = do
     print "inicio: execSkMapChunkUnChunkStopIneff"
-    res <- exec skMapChunkUnChunkStopIneff (repeat 5000)
+    res <- exec defaultIOEC skMapChunkUnChunkStopIneff (repeat 5000)
     print "fin"
     print res
 
-execSkMapSkelSimple :: IO()
+execSkMapSkelSimple :: IO ()
 execSkMapSkelSimple = do
     print "inicio: execSkMapSkelSimple"
-    res <- exec skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
+    res <- exec defaultIOEC skMapSkelSimple [1000000000, 1000000000, 1000000000, 1000000000]
     print "fin"
     print res
 
-execSkVecProdChunk :: IO()
+execSkVecProdChunk :: IO ()
 execSkVecProdChunk = do
     print "inicio: execSkVecProdChunk"
-    res <- exec skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
+    res <- exec defaultIOEC skVecProdChunk ([0 .. 100000000], [0 .. 100000000])
     print "fin"
     print res
 
-execSkKMeansOneStep :: IO()
+execSkKMeansOneStep :: IO ()
 execSkKMeansOneStep = do
     print "inicio: execSkKMeansOneStep"
     let n = 100
@@ -246,7 +250,7 @@ execSkKMeansOneStep = do
     print ps
     print "ms: "
     print ms
-    resSk <- exec skKMeansOneStep ((ps, ms), fromIntegral k)
+    resSk <- exec defaultIOEC skKMeansOneStep ((ps, ms), fromIntegral k)
     print "fin"
     print resSk
 
@@ -254,7 +258,7 @@ execSkKMeansOneStep = do
     print $ kMeansTestMauro ps ms
     
 
-execSkKMeans :: IO()
+execSkKMeans :: IO ()
 execSkKMeans = do
     print "inicio: execSkKMeans"
     let n = 200000
@@ -270,7 +274,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
+    resSk <- exec defaultIOEC skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 

@@ -9,3 +9,4 @@
 - Que el stChunk no le permita al usuario saber que usamos Vector y no permitirle manipularlo
 	- Marcos y Alberto propusieron que llevemos la dimensión del chunk (ya que pueden haber chunks de chunks), parecido a repa y accelerate
 - Poder distinguir entre streams (posiblemente) finitos e infinitos segun el tipo, y que el skRed solo funcione con streams finitos
+
