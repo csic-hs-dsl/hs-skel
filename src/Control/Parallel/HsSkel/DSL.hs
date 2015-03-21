@@ -2,13 +2,14 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 -- | This module defines the DSL to construct Streams and Skeletons.
 module Control.Parallel.HsSkel.DSL (
     -- * Types
-    Future(..),
+    Future(),
     Skel(..),
     Stream(..),
     -- * Execution
@@ -38,7 +39,6 @@ import Data.Traversable (Traversable)
 import Data.Vector (Vector)
 import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right, (+++)), ArrowApply(app), returnA)
 import Control.Category (Category, id, (.))
-import Control.Concurrent.MVar (MVar)
 import Control.DeepSeq (NFData)
 import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($))
 
@@ -49,8 +49,8 @@ import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($))
 
 -- | This type represents a computation that is running in background.
 -- Is not possible to handle futures directly and you need to use them inside the Skeletons DSL.
-newtype Future a = Future { mvar :: MVar a }
-
+--newtype Future a = Future { mvar :: MVar a }
+class Future (f :: * -> *)
 
 -- | This data type represents the core of the Skeleton DSL.
 -- 
@@ -69,21 +69,21 @@ newtype Future a = Future { mvar :: MVar a }
 -- * 'SkPair' is the same that '***' of 'Arrow'
 -- * 'SkChoice' is the same that '+++' of 'ArrowChoice' and is used in the if statement on the arrow notation.
 -- * 'SkApply' is the same that 'app' of 'ArrowApply' and is used with the -<< operator in the arrow notation.
-data Skel i o where
+data Skel f i o where
 
-    SkSeq    :: (NFData o) => (i -> o) -> Skel i o
-    SkSeq_   :: (i -> o) -> Skel i o
+    SkSeq    :: (NFData o, Future f) => (i -> o) -> Skel f i o
+    SkSeq_   :: (Future f) => (i -> o) -> Skel f i o
     
-    SkPar    :: Skel i o -> Skel i (Future o)
-    SkSync   :: Skel (Future i) i
-    SkComp   :: Skel x o -> Skel i x -> Skel i o
-    SkPair   :: Skel i1 o1 -> Skel i2 o2 -> Skel (i1, i2) (o1, o2)
+    SkPar    :: (Future f) => Skel f i o -> Skel f i (f o)
+    SkSync   :: (Future f) => Skel f (f i) i
+    SkComp   :: (Future f) => Skel f x o -> Skel f i x -> Skel f i o
+    SkPair   :: (Future f) => Skel f i1 o1 -> Skel f i2 o2 -> Skel f (i1, i2) (o1, o2)
 
-    SkMap    :: (Traversable t) => Skel i o -> Skel (t i) (t o)
-    SkChoice :: Skel i o -> Skel i' o' -> Skel (Either i i') (Either o o')
-    SkApply  :: Skel (Skel i o, i) o
+    SkMap    :: (Traversable t, Future f) => Skel f i o -> Skel f (t i) (t o)
+    SkChoice :: (Future f) => Skel f i o -> Skel f i' o' -> Skel f (Either i i') (Either o o')
+    SkApply  :: (Future f) => Skel f (Skel f i o, i) o
 
-    SkRed    :: Skel (o, i) o -> Stream i -> Skel o o
+    SkRed    :: (Future f) => Skel f (o, i) o -> Stream f i -> Skel f o o
     
 
 -- | A Stream is like a pipeline that receives a flow of data and each single data pass across multiple parallel stages.
@@ -95,36 +95,36 @@ data Skel i o where
 -- A Stream cannot be infinite and is the programmer that must ensure the end of the Stream. An Stream can be finished by returning Nothing in the function of 'StGen' or by adding an 'StStop' stage that returns true. See the doc of 'stGen' and 'stStop' for more details.
 --
 -- The Stream and Skel world are connected by the 'skRed' smart constructor, that is like a fold over the stream applying an accumulator function and returning the result inside a Skeleton.
-data Stream d where
-    StGen     :: NFData o => (i -> (Maybe (o, i))) -> i -> Stream o
-    StMap     :: Skel i o -> Stream i -> Stream o
-    StChunk   :: Int -> Stream i -> Stream (Vector i)
-    StUnChunk :: Stream (Vector i) -> Stream i
-    StStop    :: Skel (c, i) c -> c -> Skel c Bool -> Stream i -> Stream i
+data Stream f d where
+    StGen     :: (NFData o, Future f) => (i -> (Maybe (o, i))) -> i -> Stream f o
+    StMap     :: (Future f) => Skel f i o -> Stream f i -> Stream f o
+    StChunk   :: (Future f) => Int -> Stream f i -> Stream f (Vector i)
+    StUnChunk :: (Future f) => Stream f (Vector i) -> Stream f i
+    StStop    :: (Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream f i -> Stream f i
 
 
 {- ================================================================== -}
 {- ======================= Category and Arrow ======================= -}
 {- ================================================================== -}
 
-instance Category Skel where
+instance (Future f) => Category (Skel f) where
     id  = SkSeq_ id
     (.) = SkComp
 
-instance Arrow Skel where
+instance (Future f) => Arrow (Skel f) where
     arr = SkSeq_
     first sk = sk `SkPair` id
     second sk = id `SkPair` sk
     (***) = SkPair
     --(&&&) sk1 sk2 = idem to default implementation.
 
-instance ArrowChoice Skel where
+instance (Future f) => ArrowChoice (Skel f) where
     left sk = SkChoice sk id
     right sk = SkChoice id sk
     (+++) = SkChoice
     --(|||) sk1 sk2 = idem to default implementation.
 
-instance ArrowApply Skel where
+instance (Future f) => ArrowApply (Skel f) where
     app = SkApply
 
 
@@ -137,20 +137,20 @@ instance ArrowApply Skel where
 -- This constructor creates an Skeleton that fully evaluates its output.
 -- 
 -- The main use of this constructor is for pass it to the 'skPar' and ensure that the code in the 'Future' fully evaluates the result.
-skSeq :: (NFData o) => (i -> o) -- ^ A user defined function. 'NFData' is required for fully evaluates the output.
-    -> Skel i o
+skSeq :: (NFData o, Future f) => (i -> o) -- ^ A user defined function. 'NFData' is required for fully evaluates the output.
+    -> Skel f i o
 skSeq = SkSeq
 
 -- | Smart constructor for 'SkSync'.
 --
 -- This constructor blocks until the input Future is completed and is the only way to get off a Future.
-skSync :: Skel (Future i) i
+skSync :: (Future f) => Skel f (f i) i
 skSync = SkSync
 
 -- | Smart constructor for 'SkMap'.
 -- 
 -- This constructor is like 'Functor.fmap' but inside the Skeleton DSL. It takes a 'Traversable' structure and apply the Skeleton parameter to each element in the structure.
-skMap :: (Traversable t) => Skel i o -> Skel (t i) (t o)
+skMap :: (Traversable t, Future f) => Skel f i o -> Skel f (t i) (t o)
 skMap = SkMap
 
 -- | Smart constructor for 'SkRed'.
@@ -158,26 +158,26 @@ skMap = SkMap
 -- This constructor takes an accumulative Skeleton and a Stream and creates an Skeleton that takes an initial value and applies the accumulative Skeleton to each values of the Stream, returning the accumulated value.
 --
 -- Is like a fold for Stream but inside of the Skeleton DSL.
-skRed :: Skel (o, i) o -> Stream i -> Skel o o
+skRed :: (Future f) => Skel f (o, i) o -> Stream f i -> Skel f o o
 skRed = SkRed
 
 -- | Smart constructor for 'StMap'.
 --
 -- Takes a Skeleton and a Stream and returns a Stream with the same stages plus a new end stage that applies the Skeleton parameter to each value.
-stMap :: Skel i o -> Stream i -> Stream o
+stMap :: (Future f) => Skel f i o -> Stream f i -> Stream f o
 stMap = StMap
 
 -- | Smart constructor for 'StChunk'.
 --
 -- Takes a size and a Stream a returns a Stream with the same stages plus a new end stage that collect @size@ values and put them in a vector.
 -- Is useful if the work for processing each single value for the next stages is lower than the framework overhead.
-stChunk :: Int -> Stream i -> Stream (Vector i)
+stChunk :: (Future f) => Int -> Stream f i -> Stream f (Vector i)
 stChunk = StChunk
 
 -- | Smart constructor for 'StUnChunk'.
 --
 -- Allows to get of a previous 'stChuck' application by adding a new end stage that takes a 'Vector' of values and put each single value in the stream.
-stUnChunk :: Stream (Vector i) -> Stream i
+stUnChunk :: (Future f) => Stream f (Vector i) -> Stream f i
 stUnChunk = StUnChunk
 
 -- | Smart constructor for 'StStop'.
@@ -185,34 +185,34 @@ stUnChunk = StUnChunk
 -- This constructor allow to stop the Stream outside the generator function used in the 'stGen'.
 -- 
 -- Is useful for problems in which put the logic of stop the stream in the generator should be too complex. For example, generate a Stream with the first 50 fibonnacci prime numbers. Using this constructor is possible to create an Stream that the generator gives fibonnacci numbers, the next stage verifies if the number is prime, and the next stop stage verifies if we have already 50 primes numbers.
-stStop :: Skel (c, i) c -> c -> Skel c Bool -> Stream i -> Stream i
+stStop :: (Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream f i -> Stream f i
 stStop = StStop
 
 -- | This class allows to use the same function name for create an Skeleton from a function or another Skeleton.
-class SkParSupport a i o where
+class (Future f) => SkParSupport f a i o where
     -- | Smart constructor for 'SkPar'.
     -- 
     -- This constructor runs the computation parameter in background. This allows to get parallelism by running multiple computations in background.
     skPar :: a i o -- ^ A function (@i -> o@) or Skeleton (@Skel i o@)
-	    -> Skel i (Future o)
+	    -> Skel f i (f o)
     
-instance SkParSupport Skel i o where
+instance (Future f) => SkParSupport f (Skel f) i o where
     skPar = SkPar
 
-instance NFData o => SkParSupport (->) i o where
-    skPar = skPar . skSeq
+instance (NFData o, Future f) => SkParSupport f (->) i o where
+    skPar = SkPar . SkSeq
 
 -- | This class allows to use the same function name for create an Stream from a function that returns a Maybe directly or not.
-class StGenSupport f i o where
+class (Future f) => StGenSupport f fun i o where
     -- | Smart constructor for 'StGen'. This is the first stage for all Streams.
     --
     -- It takes an initial seed and a generator function that receives a seed and returns a pair with a value and another seed (see the instances). The stream is constructed by sequentially applying the generator function for the initial seed and the next generated seeds until the function returns 'Nothing'.
-    stGen :: f -> i -> Stream o
+    stGen :: fun -> i -> Stream f o
 
-instance NFData o => StGenSupport (i -> (Maybe (o, i))) i o where
+instance (NFData o, Future f) => StGenSupport f (i -> (Maybe (o, i))) i o where
     stGen = StGen
 
-instance NFData o => StGenSupport (i -> (o, i)) i o where
+instance (NFData o, Future f) => StGenSupport f (i -> (o, i)) i o where
     stGen f = StGen (Just . f)
 
 
@@ -220,8 +220,8 @@ instance NFData o => StGenSupport (i -> (o, i)) i o where
 {- ======================= Execution Context ======================== -}
 {- ================================================================== -}
 
-class ExecutionContext ec m | m -> ec where
-    exec :: ec -> Skel i o -> i -> m o
+class (Future f) => ExecutionContext ec m f | m -> ec, ec -> f where
+    exec :: ec -> Skel f i o -> i -> m o
 
 
 {- ================================================================== -}
@@ -229,7 +229,7 @@ class ExecutionContext ec m | m -> ec where
 {- ================================================================== -}
 
 -- | Creates a Stream from a List. Requires 'NFData' of elements in order to fully evaluates the values.
-stFromList :: (NFData a) => [a] -> Stream a
+stFromList :: (NFData a, Future f) => [a] -> Stream f a
 stFromList l = StGen go l
     where
         go [] = Nothing
@@ -237,35 +237,35 @@ stFromList l = StGen go l
 
 
 -- | Analogue to the 'Prelude.const' function but inside of Skeleton DSL. Returns a constant Skeleton that ignores the input and returns the parameter for all input.
-skConst :: o -- ^ The constant value returned by the Skeleton.
-    -> Skel i o
+skConst :: (Future f) => o -- ^ The constant value returned by the Skeleton.
+    -> Skel f i o
 skConst o = SkSeq_ (\_ -> o)
 
 -- | This function allows to await for a future value and then execute another Skeleton, but without blocking the caller.
 -- 
 -- The block for the result and the apply of the other Skeleton will be done all in background.
-skMapF :: (NFData o) => Skel i o -> Skel (Future i) (Future o)
+skMapF :: (NFData o, Future f) => Skel f i o -> Skel f (f i) (f o)
 skMapF sk = skPar $ sk . skSync
 
 -- | This functions transform a pair of Future in a Future of pair.
-skPairF :: Skel (Future o1, Future o2) (Future (o1, o2))
+skPairF :: (Future f) => Skel f (f o1, f o2) (f (o1, o2))
 skPairF = skPar $ (***) skSync skSync
 
 -- | This function allow transform a 'Traversable' structure of Future in a Future of the structure.
 -- 
 -- For example, using lists will it transforms a @[Future o]@ in a @Future [o]@.
-skTraverseF :: (Traversable t) => Skel (t (Future o)) (Future (t o))
+skTraverseF :: (Traversable t, Future f) => Skel f (t (f o)) (f (t o))
 skTraverseF = skPar $ skMap skSync
 
 -- | A complex Skeleton composition example.
 -- 
 -- This is a Skeleton for the Divide & Conquer pattern. It takes an Skeleton that solves the base problem, a function that say if the input is the base case, and a split and merge functions and gives an Skeleton that applies the Divide & Conquer pattern.
-skDaC :: (Traversable t) => 
-    Skel i o -- ^ Skeleton that resolves the base case.
+skDaC :: (Traversable t, Future f) => 
+    Skel f i o -- ^ Skeleton that resolves the base case.
     -> (i -> Bool) -- ^ A function that say if the input is the base case.
     -> (i -> t i) -- ^ A divide function strategy.
     -> (i -> t o -> o) -- ^ A merge function strategy.
-    -> Skel i o -- ^ A Skeleton that applies the D&C pattern.
+    -> Skel f i o -- ^ A Skeleton that applies the D&C pattern.
 skDaC skel isTrivial split combine = proc i -> do
     if (isTrivial i) 
         then

@@ -4,7 +4,8 @@
 {-# LANGUAGE FunctionalDependencies #-}
 
 module Control.Parallel.HsSkel.Exec (
-    IOEC(..)
+    IOEC(..),
+    IOFuture()
 ) where
 
 import Control.Parallel.HsSkel.DSL
@@ -15,7 +16,7 @@ import Data.Vector (freeze)
 import Data.Vector.Mutable (new, write, take)
 import Control.Category ((.))
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar, readMVar)
 import Control.Concurrent.STM (readTBQueue, tryReadTBQueue, atomically, writeTBQueue, newTBQueueIO, TBQueue)
 import Control.DeepSeq (NFData, rnf)
 import Control.Exception (evaluate)
@@ -25,9 +26,13 @@ import Prelude hiding (id, mapM, mapM_, take, (.))
 
 --import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
+newtype IOFuture a = IOFuture { mvar :: MVar a }
+
+instance Future IOFuture
+
 data IOEC = IOEC { queueLimit :: Int }
 
-instance ExecutionContext IOEC IO where
+instance ExecutionContext IOEC IO IOFuture where
     exec = execIO
 
 {- ================================================================== -}
@@ -53,7 +58,7 @@ handleBackMsg continue bqi bqo = do
 {- ======================= Stream Execution ========================= -}
 {- ================================================================== -}
 
-execStream :: IOEC -> Stream i -> IO (TBQueue (Maybe i), TBQueue BackMsg)
+execStream :: IOEC -> Stream IOFuture i -> IO (TBQueue (Maybe i), TBQueue BackMsg)
 execStream ec (StGen gen i) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
@@ -176,18 +181,18 @@ execStream ec (StStop skF z skCond stream) = do
 {- ======================== Skel Execution ========================== -}
 {- ================================================================== -}
 
-execIO :: IOEC -> Skel i o -> i -> IO o
-execIO ec (SkSeq f) = (eval =<<) . liftM f . return
-execIO ec (SkSeq_ f) = liftM f . return
+execIO :: IOEC -> Skel IOFuture i o -> i -> IO o
+execIO _ (SkSeq f) = (eval =<<) . liftM f . return
+execIO _ (SkSeq_ f) = liftM f . return
 execIO ec (SkPar sk) = \i -> (do
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)
-    return $ Future mVar)
+    return $ IOFuture mVar)
     where
         stuff i mVar = do
             r <- exec ec sk i
             putMVar mVar r
-execIO ec (SkSync) = takeMVar . mvar
+execIO _ (SkSync) = takeMVar . mvar
 execIO ec (SkComp s2 s1) = (exec ec s2 =<<) . exec ec s1
 execIO ec (SkPair sk1 sk2) = \(i1, i2) -> do
     o1 <- exec ec sk1 i1
