@@ -16,7 +16,7 @@ import Data.Vector (freeze)
 import Data.Vector.Mutable (new, write, take)
 import Control.Category ((.))
 import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, takeMVar, readMVar)
+import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
 import Control.Concurrent.STM (readTBQueue, tryReadTBQueue, atomically, writeTBQueue, newTBQueueIO, TBQueue)
 import Control.DeepSeq (NFData, rnf)
 import Control.Exception (evaluate)
@@ -192,7 +192,7 @@ execIO ec (SkPar sk) = \i -> (do
         stuff i mVar = do
             r <- exec ec sk i
             putMVar mVar r
-execIO _ (SkSync) = takeMVar . mvar
+execIO _ (SkSync) = readMVar . mvar
 execIO ec (SkComp s2 s1) = (exec ec s2 =<<) . exec ec s1
 execIO ec (SkPair sk1 sk2) = \(i1, i2) -> do
     o1 <- exec ec sk1 i1
