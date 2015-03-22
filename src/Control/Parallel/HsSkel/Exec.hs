@@ -112,15 +112,16 @@ execStream ec (StMap _ sk stream) = do
                         Nothing -> atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StChunk dim chunkSize stream) = do
+execStream ec (StChunk dim stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
+    let chunkSize = dimHead dim
     storage <- MV.new . dimLinearSize $ dim
-    _ <- forkIO $ recc qi qo bqi bqo storage 0 (0::Int)
+    _ <- forkIO $ recc qi qo bqi bqo storage chunkSize 0 (0::Int)
     return (qo, bqi)
     where 
-        recc qi qo bqi bqo storage pos count = do
+        recc qi qo bqi bqo storage chunkSize pos count = do
             let 
                 continue = do
                     i <- atomically $ readTBQueue qi
@@ -132,9 +133,9 @@ execStream ec (StChunk dim chunkSize stream) = do
                                 then do
                                     vector <- V.freeze storage
                                     atomically $ writeTBQueue qo (Just $ Now vector)
-                                    recc qi qo bqi bqo storage 0 0
+                                    recc qi qo bqi bqo storage chunkSize 0 0
                                 else do
-                                    recc qi qo bqi bqo storage (pos + V.length vi) (count + 1)
+                                    recc qi qo bqi bqo storage chunkSize (pos + V.length vi) (count + 1)
                         Nothing -> do
                             if (pos > 0)
                                 then do

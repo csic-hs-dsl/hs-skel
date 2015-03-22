@@ -128,14 +128,14 @@ data Skel f i o where
 data Stream dim f d where
     StGen     :: (NFData o, Future f) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
     StMap     :: (DIM dim, Future f) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
-    StChunk   :: (DIM dim, Future f) => (dim :. Int) -> Int -> Stream dim f i -> Stream (dim:.Int) f i
+    StChunk   :: (DIM dim, Future f) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
     StUnChunk :: (DIM dim, Future f) => dim -> Stream (dim:.Int) f i -> Stream dim f i
     StStop    :: (DIM dim, Future f) => dim -> Skel f (c, i) c -> c -> Skel f c Bool -> Stream dim f i -> Stream dim f i
 
 stDim :: Stream dim f d -> dim
 stDim (StGen _ _) = Z
 stDim (StMap dim _ _) = dim
-stDim (StChunk dim _ _) = dim
+stDim (StChunk dim _) = dim
 stDim (StUnChunk dim _) = dim
 stDim (StStop dim _ _ _ _) = dim
 
@@ -209,7 +209,7 @@ stMap sk st = StMap (stDim st) sk st
 -- Takes a size and a Stream a returns a Stream with the same stages plus a new end stage that collect @size@ values and put them in a vector.
 -- Is useful if the work for processing each single value for the next stages is lower than the framework overhead.
 stChunk :: (DIM dim, Future f) => Int -> Stream dim f i -> Stream (dim :. Int) f i
-stChunk size st = StChunk ((stDim st) :. size) size st
+stChunk size st = StChunk ((stDim st) :. size) st
 
 -- | Smart constructor for 'StUnChunk'.
 --
