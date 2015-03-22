@@ -1,8 +1,14 @@
 module Control.Parallel.HsSkel (
     -- Types:
+    DIM(..),
+    Z,
+    (:.),
+    dimHead,
+    dimTail,
     Future(),
-    Skel(),
-    Stream(),
+    Skel(..),
+    Stream(..),
+    stDim,
     ExecutionContext(exec),
     -- Constructors:
     skSeq,
