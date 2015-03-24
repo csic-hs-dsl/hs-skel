@@ -133,7 +133,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
 
-               let res = stMap skSync . stMap (skPar aux) . stChunk 300 . stFromList $ ps
+               let res = stMap skSync . stMap (skPar aux) . stChunk 2000 . stFromList $ ps
 
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) res -<< []
