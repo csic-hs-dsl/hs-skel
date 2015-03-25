@@ -30,6 +30,7 @@ module Control.Parallel.HsSkel.DSL (
     -- * Stream Smart Constructors
     StGenSupport(stGen),
     stMap,
+    stParMap,
     stChunk,
     stUnChunk,
     stStop,
@@ -128,6 +129,7 @@ data Skel f i o where
 data Stream dim f d where
     StGen     :: (NFData o, Future f) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
     StMap     :: (DIM dim, Future f) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
+    StParMap  :: (DIM dim, Future f) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
     StChunk   :: (DIM dim, Future f) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
     StUnChunk :: (DIM dim, Future f) => dim -> Stream (dim:.Int) f i -> Stream dim f i
     StStop    :: (DIM dim, Future f) => dim -> Skel f (c, i) c -> c -> Skel f c Bool -> Stream dim f i -> Stream dim f i
@@ -135,6 +137,7 @@ data Stream dim f d where
 stDim :: Stream dim f d -> dim
 stDim (StGen _ _) = Z
 stDim (StMap dim _ _) = dim
+stDim (StParMap dim _ _) = dim
 stDim (StChunk dim _) = dim
 stDim (StUnChunk dim _) = dim
 stDim (StStop dim _ _ _ _) = dim
@@ -203,6 +206,12 @@ skRed = SkRed
 -- Takes a Skeleton and a Stream and returns a Stream with the same stages plus a new end stage that applies the Skeleton parameter to each value.
 stMap :: (DIM dim, Future f) => Skel f i o -> Stream dim f i -> Stream dim f o
 stMap sk st = StMap (stDim st) sk st
+
+-- | Smart constructor for 'StParMap'.
+--
+-- Takes a Skeleton and a Stream and returns a Stream with the same stages plus a new end stage that applies the Skeleton parameter to each value. Each Chunk is evaluated in parallel.
+stParMap :: (DIM dim, Future f) => Skel f i o -> Stream dim f i -> Stream dim f o
+stParMap sk st = StParMap (stDim st) sk st
 
 -- | Smart constructor for 'StChunk'.
 --

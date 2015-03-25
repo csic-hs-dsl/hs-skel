@@ -15,6 +15,7 @@ module Control.Parallel.HsSkel (
     skPar,
     skSync,
     skMap,
+    stParMap,
     skRed,
     stGen,
     stMap,
