@@ -196,8 +196,7 @@ execStream ec (StUnChunk _ stream) = do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StStop _ skF z skCond stream) = undefined
-{-do
+execStream ec (StStop _ skF z skCond stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
@@ -211,7 +210,7 @@ execStream ec (StStop _ skF z skCond stream) = undefined
                     case i of
                         Just vi -> do
                             (acc', pos, stop) <- 
-                                V.foldM (\(a, p, cond) v -> 
+                                foldlM (\(a, p, cond) v -> 
                                     do -- esto no esta muy bien ya que recorre todo el arreglo
                                         if cond
                                             then do
@@ -224,7 +223,7 @@ execStream ec (StStop _ skF z skCond stream) = undefined
                             if stop
                                 then do
                                     if pos > 0 
-                                        then atomically $ writeTBQueue qo (Just $ V.take (pos - 1) vi)
+                                        then atomically $ writeTBQueue qo (Just $ S.take (pos - 1) vi)
                                         else return ()
                                     atomically $ writeTBQueue bqo Stop
                                     atomically $ writeTBQueue qo Nothing
@@ -234,7 +233,7 @@ execStream ec (StStop _ skF z skCond stream) = undefined
                         Nothing -> do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
--}
+
 {- ================================================================== -}
 {- ======================== Skel Execution ========================== -}
 {- ================================================================== -}

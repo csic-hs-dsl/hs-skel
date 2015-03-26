@@ -67,7 +67,7 @@ skMapSimple = proc l -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunk = proc l -> do
-    let st = stMap skSync . stMap (skPar doNothing) . stChunk 1000 . stFromList $ l
+    let st = stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
@@ -75,7 +75,7 @@ skMapChunk = proc l -> do
 -- Ojo que desordena la lista!
 skMapChunkUnChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
-    let st = stUnChunk . stMap skSync . stMap (skPar doNothing) . stChunk 1000 . stFromList $ l
+    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     
 -- Este parece andar bien
@@ -83,7 +83,7 @@ skMapChunkUnChunk = proc l -> do
 -- Ojo que desordena la lista!
 skMapChunkUnChunkStop :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
-    let st = stUnChunk . stMap skSync . stMap (skPar doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
+    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -96,7 +96,7 @@ skMapChunkUnChunkStop = proc l -> do
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
 skMapChunkUnChunkStopIneff :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
-    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stMap skSync . stMap (skPar doNothing) . stChunk 1000 . stGen listGen $ l
+    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -191,28 +191,28 @@ execSkMapChunk = do
     print "inicio: execSkMapChunk"
     res <- exec defaultIOEC skMapChunk (take 500000 $ repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunk :: IO ()
 execSkMapChunkUnChunk = do
     print "inicio: execSkMapChunkUnChunk"
     res <- exec defaultIOEC skMapChunkUnChunk (take 500000 $ repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunkStop :: IO ()
 execSkMapChunkUnChunkStop = do
     print "inicio: execSkMapChunkUnChunkStop"
     res <- exec defaultIOEC skMapChunkUnChunkStop (repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunkStopIneff :: IO ()
 execSkMapChunkUnChunkStopIneff = do
     print "inicio: execSkMapChunkUnChunkStopIneff"
     res <- exec defaultIOEC skMapChunkUnChunkStopIneff (repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapSkelSimple :: IO ()
 execSkMapSkelSimple = do
