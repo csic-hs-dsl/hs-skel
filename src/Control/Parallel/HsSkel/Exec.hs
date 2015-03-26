@@ -104,40 +104,6 @@ execStream ec (StMap _ sk stream) = do
                         Nothing -> atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StParMap _ sk stream) = do
-    qo1 <- newTBQueueIO (queueLimit ec)
-    bqi1 <- newTBQueueIO (queueLimit ec)
-    qo2 <- newTBQueueIO (queueLimit ec)
-    bqi2 <- newTBQueueIO (queueLimit ec)
-    (qi, bqo) <- execStream ec stream
-    _ <- forkIO $ recc1 qi qo1 bqi1 bqo
-    _ <- forkIO $ recc2 qo1 qo2 bqi2 bqi1
-    return (qo2, bqi2)
-    where 
-        recc1 qi qo bqi bqo = do
-            let 
-                continue = do
-                    res <- atomically $ readTBQueue qi
-                    case res of 
-                        Just vi -> do
-                            vo <- exec ec (SkPar (SkMap sk)) vi
-                            atomically $ writeTBQueue qo (Just vo)
-                            recc1 qi qo bqi bqo
-                        Nothing -> atomically $ writeTBQueue qo Nothing
-            handleBackMsg continue bqi bqo
-        recc2 qi qo bqi bqo = do
-            let 
-                continue = do
-                    res <- atomically $ readTBQueue qi
-                    case res of 
-                        Just vi -> do
-                            vo <- exec ec SkSync vi
-                            atomically $ writeTBQueue qo (Just vo)
-                            recc2 qi qo bqi bqo
-                        Nothing -> atomically $ writeTBQueue qo Nothing
-            handleBackMsg continue bqi bqo
-
-
 execStream ec (StChunk dim stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
@@ -185,6 +151,39 @@ execStream ec (StUnChunk _ stream) = do
                             recc qi qo bqi bqo chunk
                         Nothing -> do
                             atomically $ writeTBQueue qo Nothing
+            handleBackMsg continue bqi bqo
+
+execStream ec (StParMap _ sk stream) = do
+    qo1 <- newTBQueueIO (queueLimit ec)
+    bqi1 <- newTBQueueIO (queueLimit ec)
+    qo2 <- newTBQueueIO (queueLimit ec)
+    bqi2 <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
+    _ <- forkIO $ recc1 qi qo1 bqi1 bqo
+    _ <- forkIO $ recc2 qo1 qo2 bqi2 bqi1
+    return (qo2, bqi2)
+    where 
+        recc1 qi qo bqi bqo = do
+            let 
+                continue = do
+                    res <- atomically $ readTBQueue qi
+                    case res of 
+                        Just vi -> do
+                            vo <- exec ec (SkPar (SkMap sk)) vi
+                            atomically $ writeTBQueue qo (Just vo)
+                            recc1 qi qo bqi bqo
+                        Nothing -> atomically $ writeTBQueue qo Nothing
+            handleBackMsg continue bqi bqo
+        recc2 qi qo bqi bqo = do
+            let 
+                continue = do
+                    res <- atomically $ readTBQueue qi
+                    case res of 
+                        Just vi -> do
+                            vo <- exec ec SkSync vi
+                            atomically $ writeTBQueue qo (Just vo)
+                            recc2 qi qo bqi bqo
+                        Nothing -> atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
 execStream ec (StStop _ skF z skCond stream) = do
