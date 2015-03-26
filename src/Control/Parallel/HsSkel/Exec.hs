@@ -23,7 +23,7 @@ import Control.Monad (liftM)
 import Prelude hiding (id, mapM, mapM_, take, (.))
 
 
-import Data.Time.Clock (getCurrentTime, diffUTCTime)
+--import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
 data IOFuture a = Later (MVar a)
 readFuture :: IOFuture a -> IO a
@@ -85,8 +85,6 @@ execStream ec (StGen gen i) = do
                         Nothing -> atomically $ writeTBQueue qo Nothing
                 Just Stop -> return ()
 
---execStream (StMap (StMap stream' cons') cons) =  execStream (StMap stream' (cons . cons'))
-
 execStream ec (StMap _ sk stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
@@ -107,7 +105,6 @@ execStream ec (StMap _ sk stream) = do
             handleBackMsg continue bqi bqo
 
 execStream ec (StParMap _ sk stream) = do
---    print "0"
     qo1 <- newTBQueueIO (queueLimit ec)
     bqi1 <- newTBQueueIO (queueLimit ec)
     qo2 <- newTBQueueIO (queueLimit ec)
@@ -118,14 +115,11 @@ execStream ec (StParMap _ sk stream) = do
     return (qo2, bqi2)
     where 
         recc1 qi qo bqi bqo = do
---            print "1"
             let 
                 continue = do
---                    print "2"
                     res <- atomically $ readTBQueue qi
                     case res of 
                         Just vi -> do
---                            print "3"
                             vo <- exec ec (SkPar (SkMap sk)) vi
                             atomically $ writeTBQueue qo (Just vo)
                             recc1 qi qo bqi bqo
@@ -145,15 +139,14 @@ execStream ec (StParMap _ sk stream) = do
 
 
 execStream ec (StChunk dim stream) = do
-    t1 <- getCurrentTime
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
     let chunkSize = dimLinearSize dim
-    _ <- forkIO $ recc qi qo bqi bqo S.empty chunkSize t1
+    _ <- forkIO $ recc qi qo bqi bqo S.empty chunkSize
     return (qo, bqi)
     where 
-        recc qi qo bqi bqo storage chunkSize t1 = do
+        recc qi qo bqi bqo storage chunkSize = do
             let 
                 continue = do
                     i <- atomically $ readTBQueue qi
@@ -163,11 +156,9 @@ execStream ec (StChunk dim stream) = do
                             if (S.length storage' == chunkSize) 
                                 then do
                                     atomically $ writeTBQueue qo (Just $ storage')
-                                    t2 <- getCurrentTime
-                                    --print $ diffUTCTime t2 t1
-                                    recc qi qo bqi bqo S.empty chunkSize t2
+                                    recc qi qo bqi bqo S.empty chunkSize
                                 else do
-                                    recc qi qo bqi bqo storage' chunkSize t1
+                                    recc qi qo bqi bqo storage' chunkSize
                         Nothing -> do
                             if (S.length storage > 0)
                                 then atomically $ writeTBQueue qo (Just $ storage)
@@ -242,14 +233,12 @@ execIO :: IOEC -> Skel IOFuture i o -> i -> IO o
 execIO _ (SkSeq f) = (eval =<<) . liftM f . return
 execIO _ (SkSeq_ f) = liftM f . return
 execIO ec (SkPar sk) = \i -> (do
---    print "inicioPar"
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)
     return $ Later mVar)
     where
         stuff i mVar = do
             r <- exec ec sk i
---            print "finPar"
             putMVar mVar r
 execIO _ (SkSync) = readFuture
 execIO ec (SkComp s2 s1) = (exec ec s2 =<<) . exec ec s1
@@ -275,14 +264,3 @@ execIO ec (SkRed red stream) = \z -> do
                     reducer qi z'
                 Nothing -> do 
                     return z
-{-
-execSkParMap :: IOEC -> Skel IOFuture i o -> S.Seq i -> IO (IOFuture (S.Seq o))
-execSkParMap ec sk = \s -> (do
-    mVar <- newEmptyMVar
-    _ <- forkIO (stuff s mVar)
-    return $ Later mVar)
-    where
-        stuff s mVar = do
-            let r = mapM (exec ec sk) s
-            putMVar mVar r
-            -}
