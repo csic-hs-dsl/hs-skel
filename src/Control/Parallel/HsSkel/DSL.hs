@@ -4,14 +4,21 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
 -- | This module defines the DSL to construct Streams and Skeletons.
 module Control.Parallel.HsSkel.DSL (
     -- * Types
+    DIM(..),
+    Z,
+    (:.),
+    dimHead,
+    dimTail,
     Future(),
     Skel(..),
     Stream(..),
+    stDim,
     -- * Execution
     ExecutionContext(exec),
     -- * Skeleton Smart Constructors
@@ -23,6 +30,7 @@ module Control.Parallel.HsSkel.DSL (
     -- * Stream Smart Constructors
     StGenSupport(stGen),
     stMap,
+    stParMap,
     stChunk,
     stUnChunk,
     stStop,
@@ -36,16 +44,39 @@ module Control.Parallel.HsSkel.DSL (
 ) where
 
 import Data.Traversable (Traversable)
-import Data.Vector (Vector)
 import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right, (+++)), ArrowApply(app), returnA)
 import Control.Category (Category, id, (.))
 import Control.DeepSeq (NFData)
-import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($))
+import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($), Show, Read, Eq, Ord, (*))
 
 
 {- ================================================================== -}
 {- ============================= Types ============================== -}
 {- ================================================================== -}
+
+
+-- Indices y dimenciones, prestados de repa
+data Z = Z
+infixl 3 :.
+data tail :. head
+    = !tail :. !head
+    deriving (Show, Read, Eq, Ord)
+
+dimTail :: (DIM dim) => (dim :. Int) -> dim
+dimTail (tail :. _) = tail
+
+dimHead :: (DIM dim) => (dim :. Int) -> Int
+dimHead (_ :. head) = head
+
+class DIM dim where
+    dimLinearSize :: dim -> Int
+
+instance DIM Z where
+    dimLinearSize _ = 1
+
+instance DIM dim => DIM (dim :. Int) where
+    dimLinearSize (tail :. head) = head * (dimLinearSize tail)
+
 
 -- | This type represents a computation that is running in background.
 -- Is not possible to handle futures directly and you need to use them inside the Skeletons DSL.
@@ -83,7 +114,7 @@ data Skel f i o where
     SkChoice :: (Future f) => Skel f i o -> Skel f i' o' -> Skel f (Either i i') (Either o o')
     SkApply  :: (Future f) => Skel f (Skel f i o, i) o
 
-    SkRed    :: (Future f) => Skel f (o, i) o -> Stream f i -> Skel f o o
+    SkRed    :: (DIM dim, Future f) => Skel f (o, i) o -> Stream dim f i -> Skel f o o
     
 
 -- | A Stream is like a pipeline that receives a flow of data and each single data pass across multiple parallel stages.
@@ -95,12 +126,21 @@ data Skel f i o where
 -- A Stream cannot be infinite and is the programmer that must ensure the end of the Stream. An Stream can be finished by returning Nothing in the function of 'StGen' or by adding an 'StStop' stage that returns true. See the doc of 'stGen' and 'stStop' for more details.
 --
 -- The Stream and Skel world are connected by the 'skRed' smart constructor, that is like a fold over the stream applying an accumulator function and returning the result inside a Skeleton.
-data Stream f d where
-    StGen     :: (NFData o, Future f) => (i -> (Maybe (o, i))) -> i -> Stream f o
-    StMap     :: (Future f) => Skel f i o -> Stream f i -> Stream f o
-    StChunk   :: (Future f) => Int -> Stream f i -> Stream f (Vector i)
-    StUnChunk :: (Future f) => Stream f (Vector i) -> Stream f i
-    StStop    :: (Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream f i -> Stream f i
+data Stream dim f d where
+    StGen     :: (NFData o, Future f) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
+    StMap     :: (DIM dim, Future f) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
+    StParMap  :: (DIM dim, Future f) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
+    StChunk   :: (DIM dim, Future f) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
+    StUnChunk :: (DIM dim, Future f) => dim -> Stream (dim:.Int) f i -> Stream dim f i
+    StStop    :: (DIM dim, Future f) => dim -> Skel f (c, i) c -> c -> Skel f c Bool -> Stream dim f i -> Stream dim f i
+
+stDim :: Stream dim f d -> dim
+stDim (StGen _ _) = Z
+stDim (StMap dim _ _) = dim
+stDim (StParMap dim _ _) = dim
+stDim (StChunk dim _) = dim
+stDim (StUnChunk dim _) = dim
+stDim (StStop dim _ _ _ _) = dim
 
 
 {- ================================================================== -}
@@ -158,35 +198,41 @@ skMap = SkMap
 -- This constructor takes an accumulative Skeleton and a Stream and creates an Skeleton that takes an initial value and applies the accumulative Skeleton to each values of the Stream, returning the accumulated value.
 --
 -- Is like a fold for Stream but inside of the Skeleton DSL.
-skRed :: (Future f) => Skel f (o, i) o -> Stream f i -> Skel f o o
+skRed :: (DIM dim, Future f) => Skel f (o, i) o -> Stream dim f i -> Skel f o o
 skRed = SkRed
 
 -- | Smart constructor for 'StMap'.
 --
 -- Takes a Skeleton and a Stream and returns a Stream with the same stages plus a new end stage that applies the Skeleton parameter to each value.
-stMap :: (Future f) => Skel f i o -> Stream f i -> Stream f o
-stMap = StMap
+stMap :: (DIM dim, Future f) => Skel f i o -> Stream dim f i -> Stream dim f o
+stMap sk st = StMap (stDim st) sk st
+
+-- | Smart constructor for 'StParMap'.
+--
+-- Takes a Skeleton and a Stream and returns a Stream with the same stages plus a new end stage that applies the Skeleton parameter to each value. Each Chunk is evaluated in parallel.
+stParMap :: (DIM dim, Future f) => Skel f i o -> Stream dim f i -> Stream dim f o
+stParMap sk st = StParMap (stDim st) sk st
 
 -- | Smart constructor for 'StChunk'.
 --
 -- Takes a size and a Stream a returns a Stream with the same stages plus a new end stage that collect @size@ values and put them in a vector.
 -- Is useful if the work for processing each single value for the next stages is lower than the framework overhead.
-stChunk :: (Future f) => Int -> Stream f i -> Stream f (Vector i)
-stChunk = StChunk
+stChunk :: (DIM dim, Future f) => Int -> Stream dim f i -> Stream (dim :. Int) f i
+stChunk size st = StChunk ((stDim st) :. size) st
 
 -- | Smart constructor for 'StUnChunk'.
 --
 -- Allows to get of a previous 'stChuck' application by adding a new end stage that takes a 'Vector' of values and put each single value in the stream.
-stUnChunk :: (Future f) => Stream f (Vector i) -> Stream f i
-stUnChunk = StUnChunk
+stUnChunk :: (DIM dim, Future f) => Stream (dim :. Int) f i -> Stream dim f i
+stUnChunk st = StUnChunk (dimTail . stDim $ st) st
 
 -- | Smart constructor for 'StStop'.
 --
 -- This constructor allow to stop the Stream outside the generator function used in the 'stGen'.
 -- 
 -- Is useful for problems in which put the logic of stop the stream in the generator should be too complex. For example, generate a Stream with the first 50 fibonnacci prime numbers. Using this constructor is possible to create an Stream that the generator gives fibonnacci numbers, the next stage verifies if the number is prime, and the next stop stage verifies if we have already 50 primes numbers.
-stStop :: (Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream f i -> Stream f i
-stStop = StStop
+stStop :: (DIM dim, Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream dim f i -> Stream dim f i
+stStop acc z cond st = StStop (stDim st) acc z cond st
 
 -- | This class allows to use the same function name for create an Skeleton from a function or another Skeleton.
 class (Future f) => SkParSupport f a i o where
@@ -207,7 +253,7 @@ class (Future f) => StGenSupport f fun i o where
     -- | Smart constructor for 'StGen'. This is the first stage for all Streams.
     --
     -- It takes an initial seed and a generator function that receives a seed and returns a pair with a value and another seed (see the instances). The stream is constructed by sequentially applying the generator function for the initial seed and the next generated seeds until the function returns 'Nothing'.
-    stGen :: fun -> i -> Stream f o
+    stGen :: fun -> i -> Stream Z f o
 
 instance (NFData o, Future f) => StGenSupport f (i -> (Maybe (o, i))) i o where
     stGen = StGen
@@ -229,7 +275,7 @@ class (Future f) => ExecutionContext ec m f | m -> ec, ec -> f where
 {- ================================================================== -}
 
 -- | Creates a Stream from a List. Requires 'NFData' of elements in order to fully evaluates the values.
-stFromList :: (NFData a, Future f) => [a] -> Stream f a
+stFromList :: (NFData a, Future f) => [a] -> Stream Z f a
 stFromList l = StGen go l
     where
         go [] = Nothing

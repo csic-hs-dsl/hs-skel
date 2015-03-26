@@ -10,10 +10,9 @@ module Control.Parallel.HsSkel.Exec (
 
 import Control.Parallel.HsSkel.DSL
 
-import Data.Foldable (mapM_)
+import Data.Foldable (mapM_, foldlM)
 import Data.Traversable (mapM)
-import Data.Vector (freeze)
-import Data.Vector.Mutable (new, write, take)
+import qualified Data.Sequence as S
 import Control.Category ((.))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
@@ -26,7 +25,15 @@ import Prelude hiding (id, mapM, mapM_, take, (.))
 
 --import Data.Time.Clock (getCurrentTime, diffUTCTime)
 
-newtype IOFuture a = IOFuture { mvar :: MVar a }
+data IOFuture a = Later (MVar a)
+readFuture :: IOFuture a -> IO a
+readFuture (Later mvar) = readMVar mvar
+
+instance Show a => Show (IOFuture a) where
+    show (Later _) = "Later ?"
+
+instance NFData (IOFuture a) where
+    rnf _ = ()
 
 instance Future IOFuture
 
@@ -58,7 +65,7 @@ handleBackMsg continue bqi bqo = do
 {- ======================= Stream Execution ========================= -}
 {- ================================================================== -}
 
-execStream :: IOEC -> Stream IOFuture i -> IO (TBQueue (Maybe i), TBQueue BackMsg)
+execStream :: IOEC -> Stream dim IOFuture i -> IO (TBQueue (Maybe (S.Seq i)), TBQueue BackMsg)
 execStream ec (StGen gen i) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
@@ -73,14 +80,12 @@ execStream ec (StGen gen i) = do
                     case res of 
                         Just (v, i') -> do 
                             _ <- eval v
-                            atomically $ writeTBQueue qo (Just v)
+                            atomically $ writeTBQueue qo (Just $ S.singleton v)
                             recc qo bqi i'
                         Nothing -> atomically $ writeTBQueue qo Nothing
                 Just Stop -> return ()
 
---execStream (StMap (StMap stream' cons') cons) =  execStream (StMap stream' (cons . cons'))
-
-execStream ec (StMap cons stream) = do
+execStream ec (StMap _ sk stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
@@ -93,65 +98,96 @@ execStream ec (StMap cons stream) = do
                     res <- atomically $ readTBQueue qi
                     case res of 
                         Just vi -> do 
-                            vo <- exec ec cons vi
+                            vo <- return =<< exec ec (skMap sk) vi
                             atomically $ writeTBQueue qo (Just vo)
                             recc qi qo bqi bqo
                         Nothing -> atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StChunk chunkSize stream) = do
+execStream ec (StParMap _ sk stream) = do
+    qo1 <- newTBQueueIO (queueLimit ec)
+    bqi1 <- newTBQueueIO (queueLimit ec)
+    qo2 <- newTBQueueIO (queueLimit ec)
+    bqi2 <- newTBQueueIO (queueLimit ec)
+    (qi, bqo) <- execStream ec stream
+    _ <- forkIO $ recc1 qi qo1 bqi1 bqo
+    _ <- forkIO $ recc2 qo1 qo2 bqi2 bqi1
+    return (qo2, bqi2)
+    where 
+        recc1 qi qo bqi bqo = do
+            let 
+                continue = do
+                    res <- atomically $ readTBQueue qi
+                    case res of 
+                        Just vi -> do
+                            vo <- exec ec (SkPar (SkMap sk)) vi
+                            atomically $ writeTBQueue qo (Just vo)
+                            recc1 qi qo bqi bqo
+                        Nothing -> atomically $ writeTBQueue qo Nothing
+            handleBackMsg continue bqi bqo
+        recc2 qi qo bqi bqo = do
+            let 
+                continue = do
+                    res <- atomically $ readTBQueue qi
+                    case res of 
+                        Just vi -> do
+                            vo <- exec ec SkSync vi
+                            atomically $ writeTBQueue qo (Just vo)
+                            recc2 qi qo bqi bqo
+                        Nothing -> atomically $ writeTBQueue qo Nothing
+            handleBackMsg continue bqi bqo
+
+
+execStream ec (StChunk dim stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
-    storage <- new chunkSize
-    _ <- forkIO $ recc qi qo bqi bqo storage 0
+    let chunkSize = dimLinearSize dim
+    _ <- forkIO $ recc qi qo bqi bqo S.empty chunkSize
     return (qo, bqi)
     where 
-        recc qi qo bqi bqo storage pos = do
+        recc qi qo bqi bqo storage chunkSize = do
             let 
                 continue = do
                     i <- atomically $ readTBQueue qi
                     case i of
                         Just vi -> do
-                            write storage pos vi
-                            let newCant = pos + 1
-                            if (newCant == chunkSize) 
+                            let storage' = storage S.>< vi
+                            if (S.length storage' == chunkSize) 
                                 then do
-                                    vector <- freeze storage
-                                    atomically $ writeTBQueue qo (Just vector)
-                                    recc qi qo bqi bqo storage 0
+                                    atomically $ writeTBQueue qo (Just $ storage')
+                                    recc qi qo bqi bqo S.empty chunkSize
                                 else do
-                                    recc qi qo bqi bqo storage newCant
+                                    recc qi qo bqi bqo storage' chunkSize
                         Nothing -> do
-                            if (pos > 0)
-                                then do
-                                    vector <- freeze $ take pos storage
-                                    atomically $ writeTBQueue qo (Just vector)
-                                else
-                                    return ()
+                            if (S.length storage > 0)
+                                then atomically $ writeTBQueue qo (Just $ storage)
+                                else return ()
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StUnChunk stream) = do
+execStream ec (StUnChunk _ stream) = do
+    let chunk = dimHead . stDim $ stream
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
-    _ <- forkIO $ recc qi qo bqi bqo
+    _ <- forkIO $ recc qi qo bqi bqo chunk
     return (qo, bqi)
     where 
-        recc qi qo bqi bqo = do
+        recc qi qo bqi bqo chunk = do
             let 
                 continue = do
                     i <- atomically $ readTBQueue qi
                     case i of
                         Just vsi -> do
-                            mapM_ (\v -> atomically $ writeTBQueue qo (Just v)) vsi
-                            recc qi qo bqi bqo
+                            let maxChunkIdx = div (S.length vsi) chunk
+                            mapM_ (\c -> atomically . writeTBQueue qo . Just . S.take chunk . S.drop (c * chunk) $ vsi) [0 .. maxChunkIdx]
+                            recc qi qo bqi bqo chunk
                         Nothing -> do
                             atomically $ writeTBQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StStop skF z skCond stream) = do
+execStream ec (StStop _ skF z skCond stream) = do
     qo <- newTBQueueIO (queueLimit ec)
     bqi <- newTBQueueIO (queueLimit ec)
     (qi, bqo) <- execStream ec stream
@@ -164,10 +200,22 @@ execStream ec (StStop skF z skCond stream) = do
                     i <- atomically $ readTBQueue qi
                     case i of
                         Just vi -> do
-                            acc' <- exec ec skF (acc, vi)
-                            cond <- exec ec skCond acc'
-                            if cond
+                            (acc', pos, stop) <- 
+                                foldlM (\(a, p, cond) v -> 
+                                    do -- esto no esta muy bien ya que recorre todo el arreglo
+                                        if cond
+                                            then do
+                                                return (a, p, cond)
+                                            else do
+                                                a' <- exec ec skF (a, v)
+                                                cond' <- exec ec skCond a'
+                                                return (a', p + 1, cond')
+                                    ) (acc, 0, False) vi
+                            if stop
                                 then do
+                                    if pos > 0 
+                                        then atomically $ writeTBQueue qo (Just $ S.take (pos - 1) vi)
+                                        else return ()
                                     atomically $ writeTBQueue bqo Stop
                                     atomically $ writeTBQueue qo Nothing
                                 else do
@@ -187,12 +235,12 @@ execIO _ (SkSeq_ f) = liftM f . return
 execIO ec (SkPar sk) = \i -> (do
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)
-    return $ IOFuture mVar)
+    return $ Later mVar)
     where
         stuff i mVar = do
             r <- exec ec sk i
             putMVar mVar r
-execIO _ (SkSync) = readMVar . mvar
+execIO _ (SkSync) = readFuture
 execIO ec (SkComp s2 s1) = (exec ec s2 =<<) . exec ec s1
 execIO ec (SkPair sk1 sk2) = \(i1, i2) -> do
     o1 <- exec ec sk1 i1
@@ -211,9 +259,8 @@ execIO ec (SkRed red stream) = \z -> do
         reducer qi z = do
             res <- atomically $ readTBQueue qi
             case res of
-                Just v -> do
-                    z' <- exec ec red (z, v)
+                Just vi -> do
+                    z' <- foldlM (\r d -> exec ec red (r, d)) z vi
                     reducer qi z'
                 Nothing -> do 
                     return z
-

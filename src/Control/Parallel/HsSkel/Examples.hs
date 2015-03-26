@@ -19,9 +19,6 @@ import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec
 
-import Data.Functor (fmap)
-import Data.Vector (Vector, concat, foldl1)
-
 import Prelude hiding ((.), concat, id, mapM, fmap, foldl1)
 import qualified Prelude as P
 
@@ -63,25 +60,22 @@ skParSimple = proc a -> do
 -- Usa: skPar, skSeq, skSync, stMap, stFromList
 skMapSimple :: (Future f) => Skel f [Integer] [Integer]
 skMapSimple = proc l -> do
-    let st1 = stMap (skPar doNothing) (stFromList l)
-        st2 = stMap skSync st1
-    skRed (arr (\(o, i) -> i : o)) st2 -<< []
+    let st = stMap skSync . stMap (skPar doNothing) . stFromList $ l
+    skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
-skMapChunk :: (Future f) => Skel f [Integer] (Vector Integer)
+skMapChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunk = proc l -> do
-    let st1 = stMap (skPar $ fmap doNothing) (stChunk 1000 (stFromList l))
-        st2 = stMap skSync st1
-    vecs <- skRed (skSeq (\(o, i) -> i : o)) st2 -<< []
-    skSeq concat -< vecs
+    let st = stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
+    skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
 -- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
 -- Ojo que desordena la lista!
 skMapChunkUnChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
-    let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stFromList $ l
+    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     
 -- Este parece andar bien
@@ -89,7 +83,7 @@ skMapChunkUnChunk = proc l -> do
 -- Ojo que desordena la lista!
 skMapChunkUnChunkStop :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
-    let st = stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
+    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -102,7 +96,7 @@ skMapChunkUnChunkStop = proc l -> do
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
 skMapChunkUnChunkStopIneff :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
-    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stMap skSync . stMap (skPar $ fmap doNothing) . stChunk 1000 . stGen listGen $ l
+    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -120,8 +114,8 @@ skMapSkelSimple = proc l -> do
 skVecProdChunk :: (Future f) => Skel f ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st = stMap skSync . stMap (skPar $ foldl1 (+) . fmap (uncurry (*))) . stChunk 10000000 . stFromList $ pairs
-    skRed (skSeq $ (uncurry (+))) st -<< 0
+        st = stMap skSync . stMap (skPar $ uncurry (*)) . stChunk 10000000 . stFromList $ pairs
+    skRed (skSeq $ uncurry (+)) st -<< 0
 
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
@@ -139,7 +133,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
 
-               let res = stUnChunk . stMap skSync . stMap (skPar $ fmap aux) . stChunk 2000 . stFromList $ ps
+               let res = stParMap (skSeq aux) . stChunk 2000 . stFromList $ ps
 
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) res -<< []
@@ -153,7 +147,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                    else ((acx, acy), count)
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
-               let res = stUnChunk . stMap skSync . stMap (skPar $ fmap aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
+               let res = stParMap (skSeq aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
                skRed (arr (\(o, i) -> i : o)) res -<< []
 
 data KMeansStopReason = ByStep | ByThreshold
@@ -197,28 +191,28 @@ execSkMapChunk = do
     print "inicio: execSkMapChunk"
     res <- exec defaultIOEC skMapChunk (take 500000 $ repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunk :: IO ()
 execSkMapChunkUnChunk = do
     print "inicio: execSkMapChunkUnChunk"
     res <- exec defaultIOEC skMapChunkUnChunk (take 500000 $ repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunkStop :: IO ()
 execSkMapChunkUnChunkStop = do
     print "inicio: execSkMapChunkUnChunkStop"
     res <- exec defaultIOEC skMapChunkUnChunkStop (repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapChunkUnChunkStopIneff :: IO ()
 execSkMapChunkUnChunkStopIneff = do
     print "inicio: execSkMapChunkUnChunkStopIneff"
     res <- exec defaultIOEC skMapChunkUnChunkStopIneff (repeat 5000)
     print "fin"
-    print res
+    print $ length res
 
 execSkMapSkelSimple :: IO ()
 execSkMapSkelSimple = do
