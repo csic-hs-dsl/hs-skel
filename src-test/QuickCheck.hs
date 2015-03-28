@@ -60,16 +60,10 @@ instance (NFData o, Arbitrary o) => Arbitrary (StChunkTestData o) where
         return $ StChunkTestData size stream
 
 
-chunksOf :: Int -> [a] -> [[a]]
-chunksOf _ [] = []
-chunksOf n xs 
-    | n <= 0    = error "chunksOf: the chunk size must be greater than zero."
-    | otherwise = take n xs : chunksOf n (drop n xs)
-
 propOnIO :: IO Bool -> Property
 propOnIO code = monadicIO $ assert =<< run code
 
-streamToList :: Stream Z IOFuture o -> IO [o]
+streamToList :: (DIM dim) => Stream dim IOFuture o -> IO [o]
 streamToList stream = exec defaultIOEC (skRed (arr $ \(o, i) -> i:o) stream) [] >>= return . reverse
 
 
@@ -132,15 +126,13 @@ propExecStMapIsOk f stream = propOnIO $ do
     res1 <- streamToList $ stMap (skSeq f) stream
     let expected = map f list
     return (res1 == expected)
-{-
+
 propExecStChunkIsOk :: (Eq i, Arbitrary i) => StChunkTestData i -> Property
 propExecStChunkIsOk (StChunkTestData size stream) = propOnIO $ do
-    list <- streamToList stream
-    res1 <- streamToList $ stChunk size stream
-    let result = map toList res1
-        expected = chunksOf size list
+    expected <- streamToList stream
+    result <- streamToList $ stChunk size stream
     return (expected == result)
--}
+
 propExecStUnchunkIsOk :: (Eq i, Arbitrary i) => StChunkTestData i -> Property
 propExecStUnchunkIsOk (StChunkTestData size stream) = propOnIO $ do
     expected <- streamToList stream
@@ -182,13 +174,13 @@ testExecStMapIsOk = do
     let name = "testExecStMapIsOk"
     liftIO $ putStrLn name
     appendResult name =<< (liftIO $ quickCheckResult $ propExecStMapIsOk (*(2 :: Int)))
-{-
+
 testExecStChunkIsOk :: Results
 testExecStChunkIsOk = do
     let name = "testExecStChunkIsOk"
     liftIO $ putStrLn name
     appendResult name =<< (liftIO $ quickCheckResult $ (propExecStChunkIsOk :: StChunkTestData Int -> Property))
--}
+
 testExecStUnchunkIsOk :: Results
 testExecStUnchunkIsOk = do
     let name = "testExecStUnchunkIsOk"
@@ -213,7 +205,7 @@ execAllTests = do
             testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel IOFuture Int Int))
             testExecSkRedIsOk
             testExecStMapIsOk
-            --testExecStChunkIsOk
+            testExecStChunkIsOk
             testExecStUnchunkIsOk
     results <- evalStateT (allTests >> get) []
     let errors = filter (not . isSuccess . snd) results

@@ -16,7 +16,7 @@ copyright:      Universidad de la República, Uruguay
 
 library
   hs-source-dirs:   src
-  build-depends:    base >= 4.7 && < 5, stm, deepseq, random, tf-random, containers
+  build-depends:    base >= 4.7 && < 5, deepseq, random, tf-random, containers, unagi-chan
   ghc-options:      -Wall -fno-warn-orphans -fno-warn-name-shadowing
   default-Language: Haskell2010
   exposed-modules: 
