@@ -9,10 +9,10 @@ module Control.Parallel.HsSkel (
     Skel(..),
     Stream(..),
     stDim,
-    ExecutionContext(exec),
+    Exec(Context, FutureImpl, exec),
     -- Constructors:
     skSeq,
-    skPar,
+    skFork,
     skSync,
     skMap,
     stParMap,

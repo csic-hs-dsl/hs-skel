@@ -2,8 +2,8 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# OPTIONS_HADDOCK show-extensions #-}
 
@@ -20,10 +20,10 @@ module Control.Parallel.HsSkel.DSL (
     Stream(..),
     stDim,
     -- * Execution
-    ExecutionContext(exec),
+    Exec(Context, FutureImpl, exec),
     -- * Skeleton Smart Constructors
     skSeq,
-    SkParSupport(skPar),
+    SkForkSupport(skFork),
     skSync,
     skMap,
     skRed,
@@ -108,7 +108,7 @@ data Skel f i o where
     SkSeq    :: (NFData o, Future f) => (i -> o) -> Skel f i o
     SkSeq_   :: (Future f) => (i -> o) -> Skel f i o
     
-    SkPar    :: (Future f) => Skel f i o -> Skel f i (f o)
+    SkFork   :: (Future f) => Skel f i o -> Skel f i (f o)
     SkSync   :: (Future f) => Skel f (f i) i
     SkComp   :: (Future f) => Skel f x o -> Skel f i x -> Skel f i o
     SkPair   :: (Future f) => Skel f i1 o1 -> Skel f i2 o2 -> Skel f (i1, i2) (o1, o2)
@@ -180,7 +180,7 @@ instance (Future f) => ArrowApply (Skel f) where
 -- 
 -- This constructor creates a Skeleton that fully evaluates its output.
 -- 
--- The main use of this constructor is to pass it to the 'skPar' to ensure when the 'Future' is ready to be read then its value is also fully evaluated.
+-- The main use of this constructor is to pass it to the 'skFork' to ensure when the 'Future' is ready to be read then its value is also fully evaluated.
 skSeq :: (NFData o, Future f) => (i -> o) -- ^ A user defined function. 'NFData' is required for fully evaluates the output.
     -> Skel f i o
 skSeq = SkSeq
@@ -239,18 +239,18 @@ stStop :: (DIM dim, Future f) => Skel f (c, i) c -> c -> Skel f c Bool -> Stream
 stStop acc z cond st = StStop (stDim st) acc z cond st
 
 -- | This class allows to use the same function name for create a Skeleton from a function or another Skeleton.
-class (Future f) => SkParSupport f a i o where
-    -- | Smart constructor for 'SkPar'.
+class (Future f) => SkForkSupport f a i o where
+    -- | Smart constructor for 'SkFork'.
     -- 
     -- This constructor runs the computation parameter in background. This allows to get parallelism by running multiple computations in background.
-    skPar :: a i o -- ^ A function (@i -> o@) or Skeleton (@Skel i o@)
+    skFork :: a i o -- ^ A function (@i -> o@) or Skeleton (@Skel i o@)
 	    -> Skel f i (f o)
     
-instance (Future f) => SkParSupport f (Skel f) i o where
-    skPar = SkPar
+instance (Future f) => SkForkSupport f (Skel f) i o where
+    skFork = SkFork
 
-instance (NFData o, Future f) => SkParSupport f (->) i o where
-    skPar = SkPar . SkSeq
+instance (NFData o, Future f) => SkForkSupport f (->) i o where
+    skFork = SkFork . SkSeq
 
 -- | This class allows to use the same function name to create a Stream from a function that returns a Maybe directly or not.
 class (Future f) => StGenSupport f fun i o where
@@ -270,8 +270,10 @@ instance (NFData o, Future f) => StGenSupport f (i -> (o, i)) i o where
 {- ======================= Execution Context ======================== -}
 {- ================================================================== -}
 
-class (Future f) => ExecutionContext ec m f | m -> ec, ec -> f where
-    exec :: ec -> Skel f i o -> i -> m o
+class Exec m where
+    type Context m :: *
+    type FutureImpl m :: * -> *
+    exec :: (Future (FutureImpl m)) => Context m -> Skel (FutureImpl m) i o -> i -> m o
 
 
 {- ================================================================== -}
@@ -295,17 +297,17 @@ skConst o = SkSeq_ (\_ -> o)
 -- 
 -- The blocking of the result and the application of the Skeleton will be done in the background.
 skMapF :: (NFData o, Future f) => Skel f i o -> Skel f (f i) (f o)
-skMapF sk = skPar $ sk . skSync
+skMapF sk = skFork $ sk . skSync
 
 -- | This functions transform a pair of Futures into a Future of pairs.
 skPairF :: (Future f) => Skel f (f o1, f o2) (f (o1, o2))
-skPairF = skPar $ (***) skSync skSync
+skPairF = skFork $ (***) skSync skSync
 
 -- | This function transforms a 'Traversable' structure of Futures into a Future of the structure.
 -- 
 -- For example, using lists it would transform a @[Future o]@ in a @Future [o]@.
 skTraverseF :: (Traversable t, Future f) => Skel f (t (f o)) (f (t o))
-skTraverseF = skPar $ skMap skSync
+skTraverseF = skFork $ skMap skSync
 
 -- | A complex Skeleton composition example.
 -- 
@@ -321,5 +323,5 @@ skDaC skel isTrivial split combine = proc i -> do
         then
             skel -< i
         else do
-            oSplit <- skMap skSync . skMap (skPar (skDaC skel isTrivial split combine)) -< split i
+            oSplit <- skMap skSync . skMap (skFork (skDaC skel isTrivial split combine)) -< split i
             returnA -< combine i oSplit

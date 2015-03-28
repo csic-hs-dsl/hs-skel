@@ -11,7 +11,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad.State (StateT, evalStateT, get, modify)
 import Control.Monad.Trans (liftIO)
 import Control.Parallel.HsSkel
-import Control.Parallel.HsSkel.Exec
+import Control.Parallel.HsSkel.Exec.Default
 
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -108,11 +108,8 @@ propExecArrIsOk = propExecSkelVsFunIsOk arr
 propExecSkSeqIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
 propExecSkSeqIsOk = propExecSkelVsFunIsOk skSeq
 
-propExecSkSynkCompSkParIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
-propExecSkSynkCompSkParIsOk = propExecSkelVsFunIsOk (\f -> skSync . skPar f)
-
---propExecSkSynkCompSkParCompSkSeqIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
---propExecSkSynkCompSkParCompSkSeqIsOk = propExecSkelVsFunIsOk (\f -> skSync . skPar (skSeq f))
+propExecSkSynkCompSkForkIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
+propExecSkSynkCompSkForkIsOk = propExecSkelVsFunIsOk (\f -> skSync . skFork f)
 
 propStreamToListIsOk :: (Eq i, NFData i) => [i] -> Property
 propStreamToListIsOk list = propOnIO $ do
@@ -151,16 +148,14 @@ testWithReverse :: Results
 testWithReverse = testWith ("reverse", reverse :: [Int] -> [Int]) [
         ("propExecArrIsOk", propExecArrIsOk),
         ("propExecSkSeqIsOk", propExecSkSeqIsOk),
-        ("propExecSkSynkCompSkParIsOk", propExecSkSynkCompSkParIsOk)--,
-        --("propExecSkSynkCompSkParCompSkSeqIsOk", propExecSkSynkCompSkParCompSkSeqIsOk)
+        ("propExecSkSynkCompSkForkIsOk", propExecSkSynkCompSkForkIsOk)
     ]
 
 testWithPlus2 :: Results
 testWithPlus2 = testWith ("(+2)", ((+ 2) :: Int -> Int)) [
         ("propExecArrIsOk", propExecArrIsOk),
         ("propExecSkSeqIsOk", propExecSkSeqIsOk),
-        ("propExecSkSynkCompSkParIsOk", propExecSkSynkCompSkParIsOk)--,
-        --("propExecSkSynkCompSkParCompSkSeqIsOk", propExecSkSynkCompSkParCompSkSeqIsOk)
+        ("propExecSkSynkCompSkForkIsOk", propExecSkSynkCompSkForkIsOk)
     ]
 
 testExecSkRedIsOk :: Results
@@ -199,10 +194,9 @@ execAllTests = do
             testWithPlus2
             testExecSkelVsArbFunIsOk ("arr", arr)
             testExecSkelVsArbFunIsOk ("skSeq", skSeq)
-            testExecSkelVsArbFunIsOk ("skSync . skPar", \f -> skSync . skPar f)
-            --testExecSkelVsArbFunIsOk ("skSync . skPar skSeq", \f -> skSync . skPar (skSeq f))
-            testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel IOFuture Int Int))
-            testExecSkelVsArbFunIsOk ("skSync . skPar arr", \f -> skSync . skPar (arr f :: Skel IOFuture Int Int))
+            testExecSkelVsArbFunIsOk ("skSync . skFork", \f -> skSync . skFork f)
+            testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))
+            testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))
             testExecSkRedIsOk
             testExecStMapIsOk
             testExecStChunkIsOk

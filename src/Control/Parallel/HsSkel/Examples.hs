@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Control.Parallel.HsSkel.Examples (
-    execSkParSimple, 
+    execSkForkSimple, 
     execSkMapSimple, 
     execSkMapChunk, 
     execSkMapChunkUnChunk,
@@ -17,7 +17,7 @@ module Control.Parallel.HsSkel.Examples (
 import Control.Arrow(returnA, arr)
 import Control.Category ((.))
 import Control.Parallel.HsSkel
-import Control.Parallel.HsSkel.Exec
+import Control.Parallel.HsSkel.Exec.Default
 
 import Prelude hiding ((.), concat, id, mapM, fmap, foldl1)
 import qualified Prelude as P
@@ -43,13 +43,13 @@ doNothing n = if n <= 0
 {- ============================================================== -}
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync
-skParSimple :: (Future f) => Skel f Integer (Integer, Integer, Integer, Integer)
-skParSimple = proc a -> do
-    a' <- (skPar doNothing) -< a
-    b' <- (skPar doNothing) -< a
-    c' <- (skPar doNothing) -< a
-    d' <- (skPar doNothing) -< a
+-- Usa: skFork, skSeq, skSync
+skForkSimple :: (Future f) => Skel f Integer (Integer, Integer, Integer, Integer)
+skForkSimple = proc a -> do
+    a' <- (skFork doNothing) -< a
+    b' <- (skFork doNothing) -< a
+    c' <- (skFork doNothing) -< a
+    d' <- (skFork doNothing) -< a
     a'' <- skSync -< a'
     b'' <- skSync -< b'
     c'' <- skSync -< c'
@@ -57,21 +57,21 @@ skParSimple = proc a -> do
     returnA -< (a'', b'', c'', d'')
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, stMap, stFromList
+-- Usa: skFork, skSeq, skSync, stMap, stFromList
 skMapSimple :: (Future f) => Skel f [Integer] [Integer]
 skMapSimple = proc l -> do
-    let st = stMap skSync . stMap (skPar doNothing) . stFromList $ l
+    let st = stMap skSync . stMap (skFork doNothing) . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk
+-- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk
 skMapChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunk = proc l -> do
     let st = stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
+-- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
 -- Ojo que desordena la lista!
 skMapChunkUnChunk :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
@@ -79,7 +79,7 @@ skMapChunkUnChunk = proc l -> do
     skRed (arr (\(o, i) -> i : o)) st -<< []
     
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
 skMapChunkUnChunkStop :: (Future f) => Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
@@ -91,7 +91,7 @@ skMapChunkUnChunkStop = proc l -> do
         listGen _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
 skMapChunkUnChunkStopIneff :: (Future f) => Skel f [Integer] [Integer]
@@ -104,17 +104,17 @@ skMapChunkUnChunkStopIneff = proc l -> do
         listGen _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
--- Usa: skPar, skSeq, skSync, skMap, skTraverseF
+-- Usa: skFork, skSeq, skSync, skMap, skTraverseF
 skMapSkelSimple :: (Future f) => Skel f [Integer] [Integer]
 skMapSkelSimple = proc l -> do 
-    lf <- skMap (skPar doNothing) -< l
+    lf <- skMap (skFork doNothing) -< l
     skSync . skTraverseF -< lf
 
 -- Este no anda bien
 skVecProdChunk :: (Future f) => Skel f ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
-        st = stMap skSync . stMap (skPar $ uncurry (*)) . stChunk 10000000 . stFromList $ pairs
+        st = stMap skSync . stMap (skFork $ uncurry (*)) . stChunk 10000000 . stFromList $ pairs
     skRed (skSeq $ uncurry (+)) st -<< 0
 
 dist :: (Floating a) => (a, a) -> (a, a) -> a
@@ -172,10 +172,10 @@ skKMeans = proc ((ps, ms), k, threshold, step) -> do
 defaultIOEC :: IOEC
 defaultIOEC = IOEC 1000
 
-execSkParSimple :: IO ()
-execSkParSimple = do
-    print "inicio: execSkParSimple"
-    res <- exec defaultIOEC skParSimple (1000000000)
+execSkForkSimple :: IO ()
+execSkForkSimple = do
+    print "inicio: execSkForkSimple"
+    res <- exec defaultIOEC skForkSimple (1000000000)
     print "fin"
     print res
 

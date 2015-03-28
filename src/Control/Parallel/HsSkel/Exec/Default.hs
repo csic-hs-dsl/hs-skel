@@ -1,9 +1,9 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeFamilies #-}
 
-module Control.Parallel.HsSkel.Exec (
+module Control.Parallel.HsSkel.Exec.Default (
     IOEC(..),
     IOFuture()
 ) where
@@ -38,9 +38,10 @@ instance Future IOFuture
 
 data IOEC = IOEC { queueLimit :: Int }
 
-instance ExecutionContext IOEC IO IOFuture where
+instance Exec IO where
+    type Context IO = IOEC
+    type FutureImpl IO = IOFuture
     exec = execIO
-
 
 
 data Queue a = Queue { 
@@ -191,7 +192,7 @@ execStream ec (StParMap _ sk stream) = do
                     res <- readQueue qi
                     case res of 
                         Just vi -> do
-                            vo <- exec ec (SkPar (SkMap sk)) vi
+                            vo <- exec ec (SkFork (SkMap sk)) vi
                             writeQueue qo (Just vo)
                             recc1 qi qo bqi bqo
                         Nothing -> writeQueue qo Nothing
@@ -253,7 +254,7 @@ execStream ec (StStop _ skF z skCond stream) = do
 execIO :: IOEC -> Skel IOFuture i o -> i -> IO o
 execIO _ (SkSeq f) = (eval =<<) . liftM f . return
 execIO _ (SkSeq_ f) = liftM f . return
-execIO ec (SkPar sk) = \i -> (do
+execIO ec (SkFork sk) = \i -> (do
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)
     return $ Later mVar)

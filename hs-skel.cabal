@@ -22,7 +22,7 @@ library
   exposed-modules: 
                     Control.Parallel.HsSkel,
                     Control.Parallel.HsSkel.DSL,
-                    Control.Parallel.HsSkel.Exec
+                    Control.Parallel.HsSkel.Exec.Default
                     Control.Parallel.HsSkel.Examples
 
 test-suite test-hs-skel
