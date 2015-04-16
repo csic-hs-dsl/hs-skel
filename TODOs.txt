@@ -5,3 +5,4 @@
 - Podría ser útil una operación de stSplit :: Stream i -> (Stream i, Stream i) ? La idea sería poder duplicar colas, sin duplicar la generacion de elementos
 - Poder distinguir entre streams (posiblemente) finitos e infinitos segun el tipo, y que el skRed solo funcione con streams finitos
 - Podría ser útil un StFilter para descartar elementos del stream
+- Agregar map reduce como esqueleto compuesto
