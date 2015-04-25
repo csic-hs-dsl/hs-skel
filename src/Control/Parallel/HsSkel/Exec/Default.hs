@@ -34,13 +34,11 @@ data IOFuture a = Later (MVar a)
 readFuture :: IOFuture a -> IO a
 readFuture (Later mvar) = readMVar mvar
 
-instance Future IOFuture
-
 data IOEC = IOEC { queueLimit :: Int }
 
 instance Exec IO where
     type Context IO = IOEC
-    type FutureImpl IO = IOFuture
+    type Future IO = IOFuture
     exec = execIO
 
 
@@ -252,8 +250,8 @@ execStream ec (StStop _ skF z skCond stream) = do
 {- ================================================================== -}
 
 execIO :: IOEC -> Skel IOFuture i o -> i -> IO o
-execIO _ (SkSeq f) = (eval =<<) . liftM f . return
-execIO _ (SkSeq_ f) = liftM f . return
+execIO _ (SkStrict f) = (eval =<<) . liftM f . return
+execIO _ (SkLazy f) = liftM f . return
 execIO ec (SkFork sk) = \i -> (do
     mVar <- newEmptyMVar
     _ <- forkIO (stuff i mVar)

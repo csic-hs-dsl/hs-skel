@@ -106,7 +106,7 @@ propExecArrIsOk :: (Eq o) => (i -> o) -> i -> Property
 propExecArrIsOk = propExecSkelVsFunIsOk arr
 
 propExecSkSeqIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
-propExecSkSeqIsOk = propExecSkelVsFunIsOk skSeq
+propExecSkSeqIsOk = propExecSkelVsFunIsOk skStrict
 
 propExecSkSynkCompSkForkIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
 propExecSkSynkCompSkForkIsOk = propExecSkelVsFunIsOk (\f -> skSync . skFork f)
@@ -120,7 +120,7 @@ propStreamToListIsOk list = propOnIO $ do
 propExecStMapIsOk :: (NFData o, Eq o) => (i -> o) -> Stream Z IOFuture i -> Property
 propExecStMapIsOk f stream = propOnIO $ do
     list <- streamToList stream
-    res1 <- streamToList $ stMap (skSeq f) stream
+    res1 <- streamToList $ stMap (skStrict f) stream
     let expected = map f list
     return (res1 == expected)
 
@@ -193,7 +193,7 @@ execAllTests = do
             testWithReverse
             testWithPlus2
             testExecSkelVsArbFunIsOk ("arr", arr)
-            testExecSkelVsArbFunIsOk ("skSeq", skSeq)
+            testExecSkelVsArbFunIsOk ("skStrict", skStrict)
             testExecSkelVsArbFunIsOk ("skSync . skFork", \f -> skSync . skFork f)
             testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))
             testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))

@@ -43,8 +43,8 @@ doNothing n = if n <= 0
 {- ============================================================== -}
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync
-skForkSimple :: (Future f) => Skel f Integer (Integer, Integer, Integer, Integer)
+-- Usa: skFork, skStrict, skSync
+skForkSimple :: Skel f Integer (Integer, Integer, Integer, Integer)
 skForkSimple = proc a -> do
     a' <- (skFork doNothing) -< a
     b' <- (skFork doNothing) -< a
@@ -57,33 +57,33 @@ skForkSimple = proc a -> do
     returnA -< (a'', b'', c'', d'')
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, stMap, stFromList
-skMapSimple :: (Future f) => Skel f [Integer] [Integer]
+-- Usa: skFork, skStrict, skSync, stMap, stFromList
+skMapSimple :: Skel f [Integer] [Integer]
 skMapSimple = proc l -> do
     let st = stMap skSync . stMap (skFork doNothing) . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk
-skMapChunk :: (Future f) => Skel f [Integer] [Integer]
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk
+skMapChunk :: Skel f [Integer] [Integer]
 skMapChunk = proc l -> do
-    let st = stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
+    let st = stParMap (skStrict doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk
 -- Ojo que desordena la lista!
-skMapChunkUnChunk :: (Future f) => Skel f [Integer] [Integer]
+skMapChunkUnChunk :: Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
-    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stFromList $ l
+    let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stFromList $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
-skMapChunkUnChunkStop :: (Future f) => Skel f [Integer] [Integer]
+skMapChunkUnChunkStop :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
-    let st = stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
+    let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -91,12 +91,12 @@ skMapChunkUnChunkStop = proc l -> do
         listGen _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
 -- Ojo que desordena la lista!
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
-skMapChunkUnChunkStopIneff :: (Future f) => Skel f [Integer] [Integer]
+skMapChunkUnChunkStopIneff :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
-    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skSeq doNothing) . stChunk 1000 . stGen listGen $ l
+    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stGen listGen $ l
     skRed (arr (\(o, i) -> i : o)) st -<< []
     where
         listGen :: [Integer] -> (Integer, [Integer])
@@ -104,23 +104,23 @@ skMapChunkUnChunkStopIneff = proc l -> do
         listGen _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
--- Usa: skFork, skSeq, skSync, skMap, skTraverseF
-skMapSkelSimple :: (Future f) => Skel f [Integer] [Integer]
+-- Usa: skFork, skStrict, skSync, skMap, skTraverseF
+skMapSkelSimple :: Skel f [Integer] [Integer]
 skMapSkelSimple = proc l -> do 
     lf <- skMap (skFork doNothing) -< l
     skSync . skTraverseF -< lf
 
 -- Este no anda bien
-skVecProdChunk :: (Future f) => Skel f ([Double], [Double]) Double
+skVecProdChunk :: Skel f ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
         st = stMap skSync . stMap (skFork $ uncurry (*)) . stChunk 10000000 . stFromList $ pairs
-    skRed (skSeq $ uncurry (+)) st -<< 0
+    skRed (skStrict $ uncurry (+)) st -<< 0
 
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
-skKMeansOneStep :: (Future f) => Skel f (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
+skKMeansOneStep :: Skel f (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
 skKMeansOneStep = proc ((ps, ms), k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
@@ -133,7 +133,7 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
 
-               let res = stParMap (skSeq aux) . stChunk 2000 . stFromList $ ps
+               let res = stParMap (skStrict aux) . stChunk 2000 . stFromList $ ps
 
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) res -<< []
@@ -147,13 +147,13 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
                                    else ((acx, acy), count)
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
-               let res = stParMap (skSeq aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
+               let res = stParMap (skStrict aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
                skRed (arr (\(o, i) -> i : o)) res -<< []
 
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
             
-skKMeans :: (Future f) => Skel f (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans :: Skel f (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
 skKMeans = proc ((ps, ms), k, threshold, step) -> do
     ms' <- skKMeansOneStep -< ((ps, ms), k)
     let epsilon = trace ("step: " ++ show step) $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
