@@ -11,13 +11,17 @@ module Control.Parallel.HsSkel.Examples (
     execSkMapSkelSimple, 
     execSkVecProdChunk, 
     execSkKMeansOneStep,
-    execSkKMeans
+    execSkKMeans,
+    execSkQuicksort
 ) where
 
 import Control.Arrow(returnA, arr)
 import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec.Default
+
+import Data.List (sort)
+import qualified Data.Vector as V (Vector, filter, fromList, length, concat, head, tail, toList, singleton) 
 
 import Prelude hiding ((.), concat, id, mapM, fmap, foldl1)
 import qualified Prelude as P
@@ -165,6 +169,14 @@ skKMeans = proc ((ps, ms), k, threshold, step) -> do
         skKMeans -< ((ps, ms'), k, threshold, step - 1)
 
 
+skQuicksort :: Skel f (V.Vector Int) (V.Vector Int)
+skQuicksort = skDaC (skStrict $ V.fromList . sort . V.toList) 
+                    (\i -> V.length i < 1000000) 
+                    (\xs -> let h = V.head xs
+                                t = V.tail xs
+                                in [V.filter (< h) t, V.singleton h, V.filter (>= h) t]) 
+                    (\_ -> V.concat)
+
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
@@ -273,8 +285,13 @@ execSkKMeans = do
     print resSk
 
 
-
-
+execSkQuicksort :: IO()
+execSkQuicksort = do
+    let l = V.fromList . take 10000000 . randomRs (0, 1000) $ mkTFGen 7
+    print "inicio: execSkQuicksort"
+    res <- exec defaultIOEC skQuicksort l
+    print "fin"
+    print $ V.length res
 
 kMeansTestMauro :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
 kMeansTestMauro ps ms = 

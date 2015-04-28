@@ -100,7 +100,7 @@ dimTail (tail :. _) = tail
 -- * 'SkApply' is equivalent to 'app' of 'ArrowApply' and is used with the -<< operator in the arrow notation.
 data Skel f i o where
 
-    SkStrict    :: (NFData o) => (i -> o) -> Skel f i o
+    SkStrict :: (NFData o) => (i -> o) -> Skel f i o
     SkLazy   :: (i -> o) -> Skel f i o
     
     SkFork   :: Skel f i o -> Skel f i (f o)
@@ -318,5 +318,5 @@ skDaC skel isTrivial split combine = proc i -> do
         then
             skel -< i
         else do
-            oSplit <- skMap skSync . skMap (skFork (skDaC skel isTrivial split combine)) -< split i
+            oSplit <- skMap skSync . skMap (skFork $ skDaC skel isTrivial split combine) -< split i
             returnA -< combine i oSplit
