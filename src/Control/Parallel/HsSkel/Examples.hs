@@ -12,7 +12,8 @@ module Control.Parallel.HsSkel.Examples (
     execSkVecProdChunk, 
     execSkKMeansOneStep,
     execSkKMeans,
-    execSkQuicksort
+    execSkQuicksort,
+    execSkFibonacciPrimes
 ) where
 
 import Control.Arrow(returnA, arr)
@@ -28,6 +29,8 @@ import qualified Prelude as P
 
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
+
+import Data.Numbers.Primes (isPrime)
 
 import Debug.Trace (trace)
 
@@ -177,6 +180,18 @@ skQuicksort = skDaC (skStrict $ V.fromList . sort . V.toList)
                                 in [V.filter (< h) t, V.singleton h, V.filter (>= h) t]) 
                     (\_ -> V.concat)
 
+skFibonacciPrimes :: Skel f Int [Int]
+skFibonacciPrimes = proc max -> do
+    let st = stStop (arr $ \(acc, (_, b)) -> if b then acc + 1 else acc) 0 (arr (== max)) . 
+             stMap (skStrict $ \i -> (i, isPrime i)) $
+             stGen fibGen (0 :: Int, 1 :: Int)
+    skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) st -<< []
+
+fibGen :: (Int, Int) -> (Int, (Int, Int))
+fibGen (n0, n1) = 
+    let f = n0 + n1
+    in (n0, (n1, f))
+
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
@@ -285,13 +300,20 @@ execSkKMeans = do
     print resSk
 
 
-execSkQuicksort :: IO()
+execSkQuicksort :: IO ()
 execSkQuicksort = do
     let l = V.fromList . take 10000000 . randomRs (0, 1000) $ mkTFGen 7
     print "inicio: execSkQuicksort"
     res <- exec defaultIOEC skQuicksort l
     print "fin"
     print $ V.length res
+
+execSkFibonacciPrimes :: IO ()
+execSkFibonacciPrimes = do
+    print "inicio: execSkFibonacciPrimes"
+    res <- exec defaultIOEC skFibonacciPrimes 11
+    print "fin"
+    print res    
 
 kMeansTestMauro :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
 kMeansTestMauro ps ms = 
