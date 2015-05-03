@@ -16,7 +16,10 @@ module Control.Parallel.HsSkel.Examples (
     execSkFibonacciPrimes,
     fibonacciPrimes,
     fib,
-    isPrime99194853094755497
+    isPrime99194853094755497,
+    fibList,
+    isPrimeFibList,
+    isPrimeFibIO
 ) where
 
 import Control.Arrow(returnA, arr)
@@ -33,7 +36,8 @@ import qualified Prelude as P
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
 
-import Data.Numbers.Primes (isPrime)
+--import Data.Numbers.Primes (isPrime)
+import Math.NumberTheory.Primes.Testing (isPrime, isCertifiedPrime)
 
 import Debug.Trace (trace)
 
@@ -216,12 +220,24 @@ fibonacciPrimes max count (n0, n1) acc =
         acc
     else 
         let (f, (n2, n3)) = fibGen (n0, n1)
-            isP = trace (show f) $ isPrime f
+            isP = trace (show f) $ isCertifiedPrime f
         in
             if (trace (show isP) isP) then
                 fibonacciPrimes max (count + 1) (n2, n3) (f:acc)
             else
                 fibonacciPrimes max count (n2, n3) acc
+
+fibList max s acc =
+    if length acc < max then
+        let (f, s') = fibGen s
+        in fibList max s' (f:acc) 
+    else
+        acc
+
+-- Esto llena la memoria al procesar el último
+isPrimeFibList max = map (\i -> (i, isPrime i)) . reverse $ fibList max (0, 1) []
+
+isPrimeFibIO max = P.mapM_ (\i -> print (i, isPrime i)) $ (reverse $ fibList max (0, 1) [] ) ++ [99194853094755497]
     
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
@@ -342,7 +358,7 @@ execSkQuicksort = do
 execSkFibonacciPrimes :: IO ()
 execSkFibonacciPrimes = do
     print "inicio: execSkFibonacciPrimes"
-    res <- exec defaultIOEC skFibonacciPrimes 12
+    res <- exec defaultIOEC skFibonacciPrimes 26
     print "fin"
     print res    
 
