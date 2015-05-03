@@ -13,7 +13,10 @@ module Control.Parallel.HsSkel.Examples (
     execSkKMeansOneStep,
     execSkKMeans,
     execSkQuicksort,
-    execSkFibonacciPrimes
+    execSkFibonacciPrimes,
+    fibonacciPrimes,
+    fib,
+    isPrime99194853094755497
 ) where
 
 import Control.Arrow(returnA, arr)
@@ -180,24 +183,52 @@ skQuicksort = skDaC (skStrict $ V.fromList . sort . V.toList)
                                 in [V.filter (< h) t, V.singleton h, V.filter (>= h) t]) 
                     (\_ -> V.concat)
 
-skFibonacciPrimes :: Skel f Int [Int]
+skFibonacciPrimes :: Skel f Integer [Integer]
 skFibonacciPrimes = proc max -> do
     let st = stStop (arr $ \(acc, (_, b)) -> if b then acc + 1 else acc) 0 (arr (== max)) . 
-             stMap (skStrict $ \i -> (i, isPrime i)) $
-             stGen fibGen (0 :: Int, 1 :: Int)
+             stMap skSync .
+             stMap (skFork $ \i -> (i, isPrime i)) $
+--             stMap (skStrict $ \i -> (i, isPrime i)) $
+             stGen fibGen (0 :: Integer, 1 :: Integer)
     skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) st -<< []
 
-fibGen :: (Int, Int) -> (Int, (Int, Int))
-fibGen (n0, n1) = 
-    let f = n0 + n1
-    in (n0, (n1, f))
+fibGen :: (Integer, Integer) -> (Integer, (Integer, Integer))
+fibGen (n0, n1) = (n0, (n1, n0 + n1))
 
+-- Esto llena la memoria al procesar el último, pero solo al meter el trace (isPrime)
+fib :: Integer -> (Integer, Integer) -> Integer
+fib acc (n0, n1) = 
+    let (f, (n2, n3)) = fibGen (n0, n1)
+    in
+        if trace (show $ isPrime f) (f == 99194853094755497) then
+            acc + 1
+        else
+            fib (acc + 1) (n2, n3)
+
+-- Esto no llena la memoria
+isPrime99194853094755497 :: Bool
+isPrime99194853094755497 = isPrime 99194853094755497
+
+-- Esto llena la memoria al procesar el último
+fibonacciPrimes :: Integer -> Integer -> (Integer, Integer) -> [Integer] -> [Integer]
+fibonacciPrimes max count (n0, n1) acc =
+    if max == count then
+        acc
+    else 
+        let (f, (n2, n3)) = fibGen (n0, n1)
+            isP = trace (show f) $ isPrime f
+        in
+            if (trace (show isP) isP) then
+                fibonacciPrimes max (count + 1) (n2, n3) (f:acc)
+            else
+                fibonacciPrimes max count (n2, n3) acc
+    
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
 {- =============================================================== -}
 
 defaultIOEC :: IOEC
-defaultIOEC = IOEC 1000
+defaultIOEC = IOEC 100
 
 execSkForkSimple :: IO ()
 execSkForkSimple = do
@@ -311,7 +342,7 @@ execSkQuicksort = do
 execSkFibonacciPrimes :: IO ()
 execSkFibonacciPrimes = do
     print "inicio: execSkFibonacciPrimes"
-    res <- exec defaultIOEC skFibonacciPrimes 11
+    res <- exec defaultIOEC skFibonacciPrimes 12
     print "fin"
     print res    
 
