@@ -13,7 +13,8 @@ module Control.Parallel.HsSkel.Examples (
     execSkKMeansOneStep,
     execSkKMeans,
     execSkQuicksort,
-    execSkFibonacciPrimes
+    execSkFibonacciPrimes,
+    fibonacciPrimes
 ) where
 
 import Control.Arrow(returnA, arr)
@@ -21,7 +22,8 @@ import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec.Default
 
-import Data.List (sort)
+import Data.List (sort, find)
+import Data.Maybe (isNothing)
 import qualified Data.Vector as V (Vector, filter, fromList, length, concat, head, tail, toList, singleton) 
 
 import Prelude hiding ((.), concat, id, mapM, fmap, foldl1)
@@ -30,7 +32,7 @@ import qualified Prelude as P
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
 
-import Data.Numbers.Primes (isPrime)
+--import Math.NumberTheory.Primes.Testing (isPrime, isCertifiedPrime)
 
 import Debug.Trace (trace)
 
@@ -180,17 +182,39 @@ skQuicksort = skDaC (skStrict $ V.fromList . sort . V.toList)
                                 in [V.filter (< h) t, V.singleton h, V.filter (>= h) t]) 
                     (\_ -> V.concat)
 
-skFibonacciPrimes :: Skel f Int [Int]
+skFibonacciPrimes :: Skel f Integer [Integer]
 skFibonacciPrimes = proc max -> do
     let st = stStop (arr $ \(acc, (_, b)) -> if b then acc + 1 else acc) 0 (arr (== max)) . 
-             stMap (skStrict $ \i -> (i, isPrime i)) $
-             stGen fibGen (0 :: Int, 1 :: Int)
+             stMap skSync .
+             stMap (skFork $ \i -> (i, isPrime i)) $
+--             stMap (skStrict $ \i -> (i, isPrime i)) $
+             stGen fibGen (0 :: Integer, 1 :: Integer)
     skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) st -<< []
 
-fibGen :: (Int, Int) -> (Int, (Int, Int))
-fibGen (n0, n1) = 
-    let f = n0 + n1
-    in (n0, (n1, f))
+fibGen :: (Integer, Integer) -> (Integer, (Integer, Integer))
+fibGen (n0, n1) = (n0, (n1, n0 + n1))
+
+-- Implementacion trucha de isPrime
+isPrime :: Integer -> Bool
+isPrime n = 
+    let q = (truncate :: Double -> Integer) . sqrt . fromIntegral $ n
+        d = find (\i -> mod n i == 0) (2 : [3, 5 .. q])
+    in (n == 2) || ((n /= 0) && (n /= 1) && (isNothing d))
+
+fibonacciPrimes :: Integer -> [Integer]
+fibonacciPrimes max = fibonacciPrimes_ max 0 (0, 1) []
+
+fibonacciPrimes_ :: Integer -> Integer -> (Integer, Integer) -> [Integer] -> [Integer]
+fibonacciPrimes_ max count s acc =
+    if max == count then
+        acc
+    else 
+        let (f, s') = fibGen s
+        in
+            if isPrime f then
+                fibonacciPrimes_ max (count + 1) s' (f:acc)
+            else
+                fibonacciPrimes_ max count s' acc
 
 {- =============================================================== -}
 {- ======================== Excel Tests ========================== -}
@@ -311,7 +335,7 @@ execSkQuicksort = do
 execSkFibonacciPrimes :: IO ()
 execSkFibonacciPrimes = do
     print "inicio: execSkFibonacciPrimes"
-    res <- exec defaultIOEC skFibonacciPrimes 11
+    res <- exec (IOEC 5) skFibonacciPrimes 12
     print "fin"
     print res    
 

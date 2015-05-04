@@ -233,9 +233,7 @@ execStream ec (StStop _ skF z skCond stream) = do
                                     ) (acc, 0, False) vi
                             if stop
                                 then do
-                                    if pos > 0 
-                                        then writeQueue qo (Just $ S.take (pos - 1) vi)
-                                        else return ()
+                                    writeQueue qo (Just $ S.take (pos + 1) vi)
                                     writeQueue bqo Stop
                                     writeQueue qo Nothing
                                 else do
