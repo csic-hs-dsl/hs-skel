@@ -22,7 +22,7 @@ import Control.Category ((.))
 import Control.Parallel.HsSkel
 import Control.Parallel.HsSkel.Exec.Default
 
-import Data.List (sort, find)
+import Data.List (sort, find, concat)
 import Data.Maybe (isNothing)
 import qualified Data.Vector as V (Vector, filter, fromList, length, concat, head, tail, toList, singleton) 
 
@@ -173,14 +173,21 @@ skKMeans = proc ((ps, ms), k, threshold, step) -> do
     else   
         skKMeans -< ((ps, ms'), k, threshold, step - 1)
 
-
-skQuicksort :: Skel f (V.Vector Int) (V.Vector Int)
-skQuicksort = skDaC (skStrict $ V.fromList . sort . V.toList) 
-                    (\i -> V.length i < 1000000) 
+skQuicksortV :: Int -> Skel f (V.Vector Int) (V.Vector Int)
+skQuicksortV max = skDaC (skStrict $ V.fromList . sort . V.toList) 
+                    (\i -> V.length i < max) 
                     (\xs -> let h = V.head xs
                                 t = V.tail xs
                                 in [V.filter (< h) t, V.singleton h, V.filter (>= h) t]) 
                     (\_ -> V.concat)
+
+skQuicksortL :: Int -> Skel f [Int] [Int]
+skQuicksortL max = skDaC (skStrict sort) 
+                    (\i -> length (take max i) < max) 
+                    (\xs -> let h = head xs
+                                t = tail xs
+                            in [filter (< h) t, [h], filter (>= h) t]) 
+                    (\_ -> concat)
 
 skFibonacciPrimes :: Skel f Integer [Integer]
 skFibonacciPrimes = proc max -> do
@@ -326,11 +333,11 @@ execSkKMeans = do
 
 execSkQuicksort :: IO ()
 execSkQuicksort = do
-    let l = V.fromList . take 10000000 . randomRs (0, 1000) $ mkTFGen 7
+    let l = take 1000000 . randomRs (0, 1000) $ mkTFGen 7
     print "inicio: execSkQuicksort"
-    res <- exec defaultIOEC skQuicksort l
+    res <- exec defaultIOEC (skQuicksortL 10000) l
     print "fin"
-    print $ V.length res
+    print $ length res
 
 execSkFibonacciPrimes :: IO ()
 execSkFibonacciPrimes = do
