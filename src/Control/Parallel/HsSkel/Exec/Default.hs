@@ -270,7 +270,7 @@ execIO ec (SkChoice sl sr) = \input ->
         Left i -> exec ec sl i >>= return . Left
         Right i -> exec ec sr i >>= return . Right
 execIO ec (SkApply) = \(sk, i) -> exec ec sk i
-execIO ec (SkRed red stream) = \z -> do
+execIO ec (SkRed red z) = \stream -> do
     (qi, _) <- execStream ec stream   
     reducer qi z
     where 

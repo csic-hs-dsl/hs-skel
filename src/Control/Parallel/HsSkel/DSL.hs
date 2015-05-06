@@ -112,7 +112,7 @@ data Skel f i o where
     SkChoice :: Skel f i o -> Skel f i' o' -> Skel f (Either i i') (Either o o')
     SkApply  :: Skel f (Skel f i o, i) o
 
-    SkRed    :: (DIM dim) => Skel f (o, i) o -> Stream dim f i -> Skel f o o
+    SkRed    :: (DIM dim) => Skel f (o, i) o -> o -> Skel f (Stream dim f i) o
     
 
 -- | A Stream is like a pipeline that receives a flow of data and each single data passes across multiple parallel stages.
@@ -197,7 +197,7 @@ skMap = SkMap
 -- This constructor takes an accumulative Skeleton and a Stream and creates a Skeleton that takes an initial value and applies the accumulative Skeleton to each value of the Stream, returning the accumulated value.
 --
 -- Is like a fold for Stream but inside of the Skeleton DSL.
-skRed :: (DIM dim) => Skel f (o, i) o -> Stream dim f i -> Skel f o o
+skRed :: (DIM dim) => Skel f (o, i) o -> o -> Skel f (Stream dim f i) o
 skRed = SkRed
 
 -- | Smart constructor for 'StMap'.

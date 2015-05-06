@@ -64,7 +64,7 @@ propOnIO :: IO Bool -> Property
 propOnIO code = monadicIO $ assert =<< run code
 
 streamToList :: (DIM dim) => Stream dim IOFuture o -> IO [o]
-streamToList stream = exec defaultIOEC (skRed (arr $ \(o, i) -> i:o) stream) [] >>= return . reverse
+streamToList stream = exec defaultIOEC (skRed (arr $ \(o, i) -> i:o) []) stream >>= return . reverse
 
 
 type StateWithIO s a = StateT s IO a
