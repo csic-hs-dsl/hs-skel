@@ -129,8 +129,8 @@ skVecProdChunk = proc (vA, vB) -> do
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
-skKMeansOneStep :: Skel f (([(Double, Double)], [(Double, Double)]), Integer) [(Double, Double)]
-skKMeansOneStep = proc ((ps, ms), k) -> do
+skKMeansOneStep :: Skel f ([(Double, Double)], [(Double, Double)], Integer) [(Double, Double)]
+skKMeansOneStep = proc (ps, ms, k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
     returnA -< ms'
@@ -162,16 +162,16 @@ skKMeansOneStep = proc ((ps, ms), k) -> do
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
             
-skKMeans :: Skel f (([(Double, Double)], [(Double, Double)]), Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
-skKMeans = proc ((ps, ms), k, threshold, step) -> do
-    ms' <- skKMeansOneStep -< ((ps, ms), k)
-    let epsilon = trace ("step: " ++ show step) $ foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+skKMeans :: Skel f ([(Double, Double)], [(Double, Double)], Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans = proc (ps, ms, k, threshold, step) -> do
+    ms' <- skKMeansOneStep -< (ps, ms, k)
+    let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
     if epsilon < threshold then
         returnA -< (ms', ByThreshold)
     else if step == 0 then
         returnA -< (ms', ByStep)
     else   
-        skKMeans -< ((ps, ms'), k, threshold, step - 1)
+        skKMeans -< (ps, ms', k, threshold, step - 1)
 
 skQuicksortV :: Int -> Skel f (V.Vector Int) (V.Vector Int)
 skQuicksortV max = skDaC (skStrict $ V.fromList . sort . V.toList) 
@@ -302,7 +302,7 @@ execSkKMeansOneStep = do
     print ps
     print "ms: "
     print ms
-    resSk <- exec defaultIOEC skKMeansOneStep ((ps, ms), fromIntegral k)
+    resSk <- exec defaultIOEC skKMeansOneStep (ps, ms, fromIntegral k)
     print "fin"
     print resSk
 
@@ -326,7 +326,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec defaultIOEC skKMeans ((ps, ms), fromIntegral k, 0.005, 10)
+    resSk <- exec defaultIOEC skKMeans (ps, ms, fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 
