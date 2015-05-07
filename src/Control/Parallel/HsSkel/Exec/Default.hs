@@ -87,7 +87,7 @@ handleBackMsg continue bqi bqo = do
 {- ================================================================== -}
 
 execStream :: IOEC -> Stream dim IOFuture i -> IO (Queue (Maybe (S.Seq i)), Queue BackMsg)
-execStream ec (StGen gen i) = do
+execStream ec (StUnfoldr gen i) = do
     qo <- newQueue (queueLimit ec)
     bqi <- newQueue (queueLimit ec)
     _ <- forkIO $ recc qo bqi i
@@ -207,7 +207,7 @@ execStream ec (StParMap _ sk stream) = do
                         Nothing -> writeQueue qo Nothing
             handleBackMsg continue bqi bqo
 
-execStream ec (StStop _ skF z skCond stream) = do
+execStream ec (StUntil _ skF z skCond stream) = do
     qo <- newQueue (queueLimit ec)
     bqi <- newQueue (queueLimit ec)
     (qi, bqo) <- execStream ec stream

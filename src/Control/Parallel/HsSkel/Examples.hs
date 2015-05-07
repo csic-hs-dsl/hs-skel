@@ -88,29 +88,29 @@ skMapChunkUnChunk = proc l -> do
     skRed (arr (\(o, i) -> i : o)) [] -<< st
     
 -- Este parece andar bien
--- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stUntil
 -- Ojo que desordena la lista!
 skMapChunkUnChunkStop :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
-    let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stGen listGen $ l
+    let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stUntil (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnfoldr listUnfoldr $ l
     skRed (arr (\(o, i) -> i : o)) [] -<< st
     where
-        listGen :: [Integer] -> (Integer, [Integer])
-        listGen (a:as) = (a, as)
-        listGen _ = undefined -- La lista debe ser infinita
+        listUnfoldr :: [Integer] -> (Integer, [Integer])
+        listUnfoldr (a:as) = (a, as)
+        listUnfoldr _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
--- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stStop
+-- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stUntil
 -- Ojo que desordena la lista!
 -- Hay que tener en cuanta que esta es una solucion ineficiente, ya que el Stop está al final, es sólo para probar su propagación
 skMapChunkUnChunkStopIneff :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
-    let st = stStop (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stGen listGen $ l
+    let st = stUntil (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stUnfoldr listUnfoldr $ l
     skRed (arr (\(o, i) -> i : o)) [] -<< st
     where
-        listGen :: [Integer] -> (Integer, [Integer])
-        listGen (a:as) = (a, as)
-        listGen _ = undefined -- La lista debe ser infinita
+        listUnfoldr :: [Integer] -> (Integer, [Integer])
+        listUnfoldr (a:as) = (a, as)
+        listUnfoldr _ = undefined -- La lista debe ser infinita
 
 -- Este parece andar bien
 -- Usa: skFork, skStrict, skSync, skMap, skTraverseF
@@ -191,11 +191,11 @@ skQuicksortL max = skDaC (skStrict sort)
 
 skFibonacciPrimes :: Skel f Integer [Integer]
 skFibonacciPrimes = proc max -> do
-    let st = stStop (arr $ \(acc, (_, b)) -> if b then acc + 1 else acc) 0 (arr (== max)) . 
+    let st = stUntil (arr $ \(acc, (_, b)) -> if b then acc + 1 else acc) 0 (arr (== max)) . 
              stMap skSync .
              stMap (skFork $ \i -> (i, isPrime i)) $
 --             stMap (skStrict $ \i -> (i, isPrime i)) $
-             stGen fibGen (0 :: Integer, 1 :: Integer)
+             stUnfoldr fibGen (0 :: Integer, 1 :: Integer)
     skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) [] -<< st
 
 fibGen :: (Integer, Integer) -> (Integer, (Integer, Integer))

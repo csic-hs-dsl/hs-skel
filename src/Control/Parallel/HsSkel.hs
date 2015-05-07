@@ -16,11 +16,11 @@ module Control.Parallel.HsSkel (
     skMap,
     stParMap,
     skRed,
-    stGen,
+    stUnfoldr,
     stMap,
     stChunk,
     stUnChunk,
-    stStop,
+    stUntil,
     stFromList,
     -- Utils:
     skConst,
