@@ -70,14 +70,14 @@ skForkSimple = proc a -> do
 skMapSimple :: Skel f [Integer] [Integer]
 skMapSimple = proc l -> do
     let st = stMap skSync . stMap (skFork doNothing) . stFromList $ l
-    skRed (arr (\(o, i) -> i : o)) [] -<< st
+    skRed (arr (\(o, i) -> i : o)) [] -< st
 
 -- Este parece andar bien
 -- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk
 skMapChunk :: Skel f [Integer] [Integer]
 skMapChunk = proc l -> do
     let st = stParMap (skStrict doNothing) . stChunk 1000 . stFromList $ l
-    skRed (arr (\(o, i) -> i : o)) [] -<< st
+    skRed (arr (\(o, i) -> i : o)) [] -< st
 
 -- Este parece andar bien
 -- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk
@@ -85,7 +85,7 @@ skMapChunk = proc l -> do
 skMapChunkUnChunk :: Skel f [Integer] [Integer]
 skMapChunkUnChunk = proc l -> do
     let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stFromList $ l
-    skRed (arr (\(o, i) -> i : o)) [] -<< st
+    skRed (arr (\(o, i) -> i : o)) [] -< st
     
 -- Este parece andar bien
 -- Usa: skFork, skStrict, skSync, stMap, stFromList, stChunk, skUnChunk, stUntil
@@ -93,7 +93,7 @@ skMapChunkUnChunk = proc l -> do
 skMapChunkUnChunkStop :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStop = proc l -> do
     let st = stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stUntil (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnfoldr listUnfoldr $ l
-    skRed (arr (\(o, i) -> i : o)) [] -<< st
+    skRed (arr (\(o, i) -> i : o)) [] -< st
     where
         listUnfoldr :: [Integer] -> (Integer, [Integer])
         listUnfoldr (a:as) = (a, as)
@@ -106,7 +106,7 @@ skMapChunkUnChunkStop = proc l -> do
 skMapChunkUnChunkStopIneff :: Skel f [Integer] [Integer]
 skMapChunkUnChunkStopIneff = proc l -> do
     let st = stUntil (arr $ \(acc, _) -> acc + 1 :: Integer) 0 (arr (== 500000)) . stUnChunk . stParMap (skStrict doNothing) . stChunk 1000 . stUnfoldr listUnfoldr $ l
-    skRed (arr (\(o, i) -> i : o)) [] -<< st
+    skRed (arr (\(o, i) -> i : o)) [] -< st
     where
         listUnfoldr :: [Integer] -> (Integer, [Integer])
         listUnfoldr (a:as) = (a, as)
@@ -124,7 +124,7 @@ skVecProdChunk :: Skel f ([Double], [Double]) Double
 skVecProdChunk = proc (vA, vB) -> do
     let pairs = zip vA vB -- lazy
         st = stMap skSync . stMap (skFork $ uncurry (*)) . stChunk 10000000 . stFromList $ pairs
-    skRed (skStrict $ uncurry (+)) 0 -<< st
+    skRed (skStrict $ uncurry (+)) 0 -< st
 
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
@@ -145,7 +145,7 @@ skKMeansOneStep = proc (ps, ms, k) -> do
                let res = stParMap (skStrict aux) . stChunk 2000 . stFromList $ ps
 
                -- Invierte la lista, pero no es problema
-               skRed (arr (\(o, i) -> i : o)) [] -<< res
+               skRed (arr (\(o, i) -> i : o)) [] -< res
 
             -- Sabiendo a que grupo pertenece cada punto, calcula la media de cada grupo. Asume que cada grupo tiene al menos un punto
             calcNewMeans = proc (k, ptgs) -> do
@@ -157,7 +157,7 @@ skKMeansOneStep = proc (ps, ms, k) -> do
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
                let res = stParMap (skStrict aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
-               skRed (arr (\(o, i) -> i : o)) [] -<< res
+               skRed (arr (\(o, i) -> i : o)) [] -< res
 
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
@@ -196,7 +196,7 @@ skFibonacciPrimes = proc max -> do
              stMap (skFork $ \i -> (i, isPrime i)) $
 --             stMap (skStrict $ \i -> (i, isPrime i)) $
              stUnfoldr fibGen (0 :: Integer, 1 :: Integer)
-    skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) [] -<< st
+    skRed (arr (\(o, (i, b)) -> if b then (i:o) else o)) [] -< st
 
 fibGen :: (Integer, Integer) -> (Integer, (Integer, Integer))
 fibGen (n0, n1) = (n0, (n1, n0 + n1))
