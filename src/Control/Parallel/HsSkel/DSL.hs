@@ -46,7 +46,7 @@ import Data.Traversable (Traversable)
 import Control.Arrow (Arrow(arr, first, second, (***)), ArrowChoice(left, right, (+++)), ArrowApply(app), returnA)
 import Control.Category (Category, id, (.))
 import Control.DeepSeq (NFData)
-import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($), Show, Read, Eq, Ord, (*))
+import Prelude (Bool, Either, Int, Maybe(Just, Nothing), ($), Show, Read, Eq, Ord, (*), Monad)
 
 
 {- ================================================================== -}
@@ -265,7 +265,7 @@ instance (NFData o) => StUnfoldrSupport f (i -> (o, i)) i o where
 {- ======================= Execution Context ======================== -}
 {- ================================================================== -}
 
-class Exec m where
+class (Monad m) => Exec m where
     type Context m :: *
     type Future m :: * -> *
     exec :: Context m -> Skel (Future m) i o -> i -> m o
