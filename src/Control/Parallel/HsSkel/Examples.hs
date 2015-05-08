@@ -129,8 +129,8 @@ skVecProdChunk = proc (vA, vB) -> do
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
-skKMeansOneStep :: Skel f ([(Double, Double)], [(Double, Double)], Integer) [(Double, Double)]
-skKMeansOneStep = proc (ps, ms, k) -> do
+skKMeansOneStep :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Integer) [(Double, Double)]
+skKMeansOneStep assignChunk calcMeansChunk = proc (ps, ms, k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
     returnA -< ms'
@@ -142,7 +142,7 @@ skKMeansOneStep = proc (ps, ms, k) -> do
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
 
-               let res = stParMap (skStrict aux) . stChunk 2000 . stFromList $ ps
+               let res = stParMap (skStrict aux) . stChunk assignChunk . stFromList $ ps
 
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) [] -< res
@@ -156,22 +156,22 @@ skKMeansOneStep = proc (ps, ms, k) -> do
                                    else ((acx, acy), count)
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
-               let res = stParMap (skStrict aux) . stChunk 10 . stFromList $ [(k - 1), (k - 2) .. 0]
+               let res = stParMap (skStrict aux) . stChunk calcMeansChunk . stFromList $ [(k - 1), (k - 2) .. 0]
                skRed (arr (\(o, i) -> i : o)) [] -< res
 
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
             
-skKMeans :: Skel f ([(Double, Double)], [(Double, Double)], Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
-skKMeans = proc (ps, ms, k, threshold, step) -> do
-    ms' <- skKMeansOneStep -< (ps, ms, k)
+skKMeans :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans assignChunk calcMeansChunk = proc (ps, ms, k, threshold, step) -> do
+    ms' <- skKMeansOneStep assignChunk calcMeansChunk -< (ps, ms, k)
     let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
     if epsilon < threshold then
         returnA -< (ms', ByThreshold)
     else if step == 0 then
         returnA -< (ms', ByStep)
     else   
-        skKMeans -< (ps, ms', k, threshold, step - 1)
+        skKMeans assignChunk calcMeansChunk -< (ps, ms', k, threshold, step - 1)
 
 skQuicksortV :: Int -> Skel f (V.Vector Int) (V.Vector Int)
 skQuicksortV max = skDaC (skStrict $ V.fromList . sort . V.toList) 
@@ -302,7 +302,7 @@ execSkKMeansOneStep = do
     print ps
     print "ms: "
     print ms
-    resSk <- exec defaultIOEC skKMeansOneStep (ps, ms, fromIntegral k)
+    resSk <- exec defaultIOEC (skKMeansOneStep 2000 10) (ps, ms, fromIntegral k)
     print "fin"
     print resSk
 
@@ -326,7 +326,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec defaultIOEC skKMeans (ps, ms, fromIntegral k, 0.005, 10)
+    resSk <- exec defaultIOEC (skKMeans 2000 10) (ps, ms, fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 
