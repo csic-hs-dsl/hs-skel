@@ -310,11 +310,9 @@ execSkKMeansOneStep = do
     print $ kMeansTestMauro ps ms
     
 
-execSkKMeans :: IO ()
-execSkKMeans = do
+execSkKMeans :: Int -> Int -> Int -> Int -> IO ()
+execSkKMeans n k chk1 chk2 = do
     print "inicio: execSkKMeans"
-    let n = 200000
-    let k  = 100
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
     let (pys, pysRest) = splitAt n pxsRest
@@ -326,7 +324,7 @@ execSkKMeans = do
     --print ps
     --print "ms: "
     --print ms
-    resSk <- exec defaultIOEC (skKMeans 2000 10) (ps, ms, fromIntegral k, 0.005, 10)
+    resSk <- exec defaultIOEC (skKMeans chk1 chk2) (ps, ms, fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 
