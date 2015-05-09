@@ -125,11 +125,11 @@ data Skel f i o where
 --
 -- The Stream and Skel worlds are connected by the 'SkRed' constructor, which is similar to a fold over the stream applying an accumulator function and returning the result inside a Skeleton.
 data Stream dim f d where
-    StUnfoldr     :: (NFData o) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
-    StMap     :: (DIM dim) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
-    StChunk   :: (DIM dim) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
-    StUnChunk :: (DIM dim) => dim -> Stream (dim:.Int) f i -> Stream dim f i
-    StParMap  :: (DIM dim) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
+    StUnfoldr  :: (NFData o) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
+    StMap      :: (DIM dim) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
+    StChunk    :: (DIM dim) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
+    StUnChunk  :: (DIM dim) => dim -> Stream (dim:.Int) f i -> Stream dim f i
+    StParMap   :: (DIM dim) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
     StUntil    :: (DIM dim) => dim -> Skel f (c, i) c -> c -> Skel f c Bool -> Stream dim f i -> Stream dim f i
 
 -- | An accessor to the dimension of a 'Stream'
