@@ -2,6 +2,7 @@
 {-# LANGUAGE Arrows #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Control.Parallel.HsSkel.Exec.Default (
     IOEC(..),
@@ -11,6 +12,7 @@ module Control.Parallel.HsSkel.Exec.Default (
 import Control.Parallel.HsSkel.DSL
 
 import Data.Foldable (mapM_, foldlM)
+import Data.Maybe (isJust, fromJust)
 import Data.Traversable (mapM)
 import qualified Data.Sequence as S
 import Control.Category ((.))
@@ -87,7 +89,7 @@ handleBackMsg continue bqi bqo = do
 {- ================================================================== -}
 
 execStream :: IOEC -> Stream dim IOFuture i -> IO (Queue (Maybe (S.Seq i)), Queue BackMsg)
-execStream ec (StUnfoldr gen i) = do
+execStream ec (StUnfoldr dim gen i) = do
     qo <- newQueue (queueLimit ec)
     bqi <- newQueue (queueLimit ec)
     _ <- forkIO $ recc qo bqi i
@@ -97,14 +99,25 @@ execStream ec (StUnfoldr gen i) = do
             backMsg <- tryReadQueue bqi
             case backMsg of
                 Nothing -> do
-                    let res = gen i
-                    case res of 
-                        Just (v, i') -> do 
-                            _ <- eval v
-                            writeQueue qo (Just $ S.singleton v)
-                            recc qo bqi i'
-                        Nothing -> writeQueue qo Nothing
-                Just Stop -> return ()
+                    (elems, i') <- genElems (dimLinearSize dim) S.empty i
+                    if (not $ S.null elems) 
+                        then writeQueue qo (Just elems)
+                        else return ()
+                    if (isJust i') 
+                        then recc qo bqi (fromJust i')
+                        else writeQueue qo Nothing
+                Just Stop -> do
+                    writeQueue qo Nothing
+                    return ()
+        genElems 0 seq i = return (seq, Just i)
+        genElems size seq i = do
+            let res = gen i
+            case res of
+                Just (v, i') -> do
+                    _ <- eval v
+                    genElems (size-1) (seq S.|> v) i'
+                Nothing -> return (seq, Nothing)
+
 
 execStream ec (StMap _ sk stream) = do
     qo <- newQueue (queueLimit ec)

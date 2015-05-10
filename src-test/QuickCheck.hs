@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Main (
     main
@@ -25,6 +26,8 @@ import Prelude hiding ((.))
 
 {-- ================================================================ --}
 {-- ================================================================ --}
+data D dim = D
+
 data FunTest a b = FunTest (a -> b) [a]
 
 instance (Show a, Show b) => Show (FunTest a b) where
@@ -41,13 +44,22 @@ instance (Arbitrary a, CoArbitrary a, Arbitrary b) => Arbitrary (FunTest a b) wh
         fun <- arbitrary :: Gen (a -> b)
         return $ FunTest fun inputs
 
+instance Arbitrary Z where
+    arbitrary = return Z
 
-instance (NFData o, Arbitrary o) => Arbitrary (Stream Z IOFuture o) where
+instance (DIM dim, Arbitrary dim) => Arbitrary (dim :. Int) where
     arbitrary = do
-        list <- arbitrary
-        return $ stFromList list
+        dim <- arbitrary
+        size <- choose (1, 10)
+        return (dim :. size)
 
-instance Show a => Show (Stream Z IOFuture a) where
+instance (NFData o, Arbitrary o, DIM dim, Arbitrary dim) => Arbitrary (Stream dim IOFuture o) where
+    arbitrary = do
+        dim <- arbitrary
+        list <- arbitrary
+        return $ stFromList dim list
+
+instance (Show a, DIM dim) => Show (Stream dim IOFuture a) where
     show st = show $ unsafePerformIO $ streamToList st
 
 
@@ -113,7 +125,7 @@ propExecSkSynkCompSkForkIsOk = propExecSkelVsFunIsOk (\f -> skSync . skFork f)
 
 propStreamToListIsOk :: (Eq i, NFData i) => [i] -> Property
 propStreamToListIsOk list = propOnIO $ do
-    let stream = stFromList list
+    let stream = stFromList Z list
     res <- streamToList stream
     return (list == res)
 

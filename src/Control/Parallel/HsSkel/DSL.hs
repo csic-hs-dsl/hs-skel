@@ -11,8 +11,8 @@
 module Control.Parallel.HsSkel.DSL (
     -- * Types
     DIM(..),
-    Z(),
-    (:.)(),
+    Z(..),
+    (:.)(..),
     dimHead,
     dimTail,
     Skel(..),
@@ -59,7 +59,7 @@ class DIM dim where
     dimLinearSize :: dim -> Int
 
 -- | This type represents a 0-dimensional chunk (an element)
-data Z = Z
+data Z = Z deriving (Show, Read)
 
 -- | This type represents an N-dimensional chunk (where N > 0)
 data tail :. head
@@ -125,7 +125,7 @@ data Skel f i o where
 --
 -- The Stream and Skel worlds are connected by the 'SkRed' constructor, which is similar to a fold over the stream applying an accumulator function and returning the result inside a Skeleton.
 data Stream dim f d where
-    StUnfoldr  :: (NFData o) => (i -> (Maybe (o, i))) -> i -> Stream Z f o
+    StUnfoldr  :: (NFData o, DIM dim) => dim -> (i -> (Maybe (o, i))) -> i -> Stream dim f o
     StMap      :: (DIM dim) => dim -> Skel f i o -> Stream dim f i -> Stream dim f o
     StChunk    :: (DIM dim) => (dim :. Int) -> Stream dim f i -> Stream (dim:.Int) f i
     StUnChunk  :: (DIM dim) => dim -> Stream (dim:.Int) f i -> Stream dim f i
@@ -134,7 +134,7 @@ data Stream dim f d where
 
 -- | An accessor to the dimension of a 'Stream'
 stDim :: Stream dim f d -> dim
-stDim (StUnfoldr _ _) = Z
+stDim (StUnfoldr dim _ _) = dim
 stDim (StMap dim _ _) = dim
 stDim (StParMap dim _ _) = dim
 stDim (StChunk dim _) = dim
@@ -252,13 +252,13 @@ class StUnfoldrSupport f fun i o where
     -- | Smart constructor for 'StUnfoldr'. This is the first stage for all Streams.
     --
     -- It takes an initial seed and a generator function that receives a seed and returns a pair with a value and another seed (see the instances). The stream is constructed by sequentially applying the generator function for the initial seed and the next generated seeds until the function returns 'Nothing'.
-    stUnfoldr :: fun -> i -> Stream Z f o
+    stUnfoldr :: (DIM dim) => dim -> fun -> i -> Stream dim f o
 
 instance (NFData o) => StUnfoldrSupport f (i -> (Maybe (o, i))) i o where
-    stUnfoldr = StUnfoldr
+    stUnfoldr dim = StUnfoldr dim
 
 instance (NFData o) => StUnfoldrSupport f (i -> (o, i)) i o where
-    stUnfoldr f = StUnfoldr (Just . f)
+    stUnfoldr dim f = StUnfoldr dim (Just . f)
 
 
 {- ================================================================== -}
@@ -276,8 +276,8 @@ class (Monad m) => Exec m where
 {- ================================================================== -}
 
 -- | Creates a Stream from a List. Requires 'NFData' of its elements in order to fully evaluate them.
-stFromList :: (NFData a) => [a] -> Stream Z f a
-stFromList l = StUnfoldr go l
+stFromList :: (DIM dim, NFData a) => dim -> [a] -> Stream dim f a
+stFromList dim l = StUnfoldr dim go l
     where
         go [] = Nothing
         go (x:xs) = Just (x, xs)

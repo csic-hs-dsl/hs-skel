@@ -1,8 +1,8 @@
 module Control.Parallel.HsSkel (
     -- Types:
     DIM(..),
-    Z,
-    (:.),
+    Z(..),
+    (:.)(..),
     dimHead,
     dimTail,
     Skel(..),
