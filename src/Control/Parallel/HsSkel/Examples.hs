@@ -133,7 +133,7 @@ skVecProdChunk = proc (vA, vB) -> do
 dist :: (Floating a) => (a, a) -> (a, a) -> a
 dist (x, y) (x', y') = (x - x') ** 2 + (y - y') ** 2
 
-skKMeansOneStep :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Integer) [(Double, Double)]
+skKMeansOneStep :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Int) [(Double, Double)]
 skKMeansOneStep assignChunk calcMeansChunk = proc (ps, ms, k) -> do
     ptgs <- calcPointGroup -< (ps, ms)
     ms' <- calcNewMeans -< (k, ptgs)
@@ -166,7 +166,7 @@ skKMeansOneStep assignChunk calcMeansChunk = proc (ps, ms, k) -> do
 data KMeansStopReason = ByStep | ByThreshold
     deriving Show
             
-skKMeans :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Integer, Double, Integer) ([(Double, Double)], KMeansStopReason)
+skKMeans :: Int -> Int -> Skel f ([(Double, Double)], [(Double, Double)], Int, Double, Int) ([(Double, Double)], KMeansStopReason)
 skKMeans assignChunk calcMeansChunk = proc (ps, ms, k, threshold, step) -> do
     ms' <- skKMeansOneStep assignChunk calcMeansChunk -< (ps, ms, k)
     let epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
@@ -314,8 +314,8 @@ execSkKMeansOneStep = do
     print $ kMeansTestOneStep ps ms
     
 
-execSkKMeans :: Int -> Int -> Int -> Int -> Int -> IO ()
-execSkKMeans n k chk1 chk2 qSize = do
+execSkKMeans :: Int -> Int -> Int -> Int -> Int -> Double -> Int -> IO ()
+execSkKMeans n k chk1 chk2 qSize threshold steps = do
     print "inicio: execSkKMeans"
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
@@ -324,21 +324,21 @@ execSkKMeans n k chk1 chk2 qSize = do
     let (mys, _) = splitAt k mxsRest
     let ps = zip pxs pys
     let ms = zip mxs mys
-    resSk <- exec (IOEC qSize) (skKMeans chk1 chk2) (ps, ms, fromIntegral k, 0.005, 10)
+    resSk <- exec (IOEC qSize) (skKMeans chk1 chk2) (ps, ms, k, threshold, steps)
     print "fin"
     print resSk
 
-execKMeansTest :: Int -> Int -> IO ()
-execKMeansTest n k = do
+execKMeansTest :: Int -> Int -> Double -> Int -> IO ()
+execKMeansTest n k threshold steps = do
     print "inicio: execKMeansTest"
     let gen = mkTFGen 1
     let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
     let (pys, pysRest) = splitAt n pxsRest
     let (mxs, mxsRest) = splitAt k pysRest
     let (mys, _) = splitAt k mxsRest
-    let ps :: [(Double, Double)]= zip pxs pys
+    let ps = zip pxs pys
     let ms = zip mxs mys
-    let res = kMeansTest ps ms 0.005 10
+    let res = kMeansTest ps ms threshold steps
 --    evaluate $ rnf res
     print "fin"
     print res
