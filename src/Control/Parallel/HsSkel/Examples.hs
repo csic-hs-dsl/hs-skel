@@ -14,7 +14,8 @@ module Control.Parallel.HsSkel.Examples (
     execSkKMeans,
     execSkQuicksort,
     execSkFibonacciPrimes,
-    fibonacciPrimes
+    fibonacciPrimes,
+    execKMeansTest
 ) where
 
 import Control.Arrow(returnA, arr)
@@ -31,6 +32,9 @@ import qualified Prelude as P
 
 import System.Random (randomRs)
 import System.Random.TF.Init (mkTFGen)
+
+--import Control.DeepSeq (NFData, rnf)
+--import Control.Exception (evaluate)
 
 --import Math.NumberTheory.Primes.Testing (isPrime, isCertifiedPrime)
 
@@ -306,8 +310,8 @@ execSkKMeansOneStep = do
     print "fin"
     print resSk
 
-    print "kMeansTestMauro"
-    print $ kMeansTestMauro ps ms
+    print "kMeansTestOneStep"
+    print $ kMeansTestOneStep ps ms
     
 
 execSkKMeans :: Int -> Int -> Int -> Int -> Int -> IO ()
@@ -320,14 +324,24 @@ execSkKMeans n k chk1 chk2 qSize = do
     let (mys, _) = splitAt k mxsRest
     let ps = zip pxs pys
     let ms = zip mxs mys
-    --print "ps: "
-    --print ps
-    --print "ms: "
-    --print ms
     resSk <- exec (IOEC qSize) (skKMeans chk1 chk2) (ps, ms, fromIntegral k, 0.005, 10)
     print "fin"
     print resSk
 
+execKMeansTest :: Int -> Int -> IO ()
+execKMeansTest n k = do
+    print "inicio: execKMeansTest"
+    let gen = mkTFGen 1
+    let (pxs, pxsRest) = splitAt n $ randomRs (1, 100) gen
+    let (pys, pysRest) = splitAt n pxsRest
+    let (mxs, mxsRest) = splitAt k pysRest
+    let (mys, _) = splitAt k mxsRest
+    let ps :: [(Double, Double)]= zip pxs pys
+    let ms = zip mxs mys
+    let res = kMeansTest ps ms 0.005 10
+--    evaluate $ rnf res
+    print "fin"
+    print res
 
 execSkQuicksort :: IO ()
 execSkQuicksort = do
@@ -344,8 +358,20 @@ execSkFibonacciPrimes = do
     print "fin"
     print res    
 
-kMeansTestMauro :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
-kMeansTestMauro ps ms = 
+kMeansTest :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> t -> Int -> ([(t, t)], KMeansStopReason)
+kMeansTest ps ms threshold step = 
+    let ms' = kMeansTestOneStep ps ms
+        epsilon = foldl (\r (m, m') -> max r (sqrt $ dist m m')) 0 (zip ms ms')
+    in
+        if epsilon < threshold then
+            (ms', ByThreshold)
+        else if step == 0 then
+            (ms', ByStep)
+        else   
+            kMeansTest ps ms' threshold (step - 1)
+
+kMeansTestOneStep :: (Ord t, Floating t) => [(t, t)] -> [(t, t)] -> [(t, t)]
+kMeansTestOneStep ps ms = 
     let dist (x, y) (x', y')    = (x - x') ** 2 + (y - y') ** 2
         sumPair (x, y) (x', y') = (x + x', y + y')
         divPair (x, y) d        = (x / d, y / d)
