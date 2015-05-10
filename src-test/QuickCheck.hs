@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Main (
     main
@@ -23,6 +24,8 @@ import Test.QuickCheck.Monadic (assert, monadicIO, run)
 
 import Prelude hiding ((.))
 
+import Data.Typeable
+import Control.Exception.Base (throwIO, Exception)
 
 {-- ================================================================ --}
 {-- ================================================================ --}
@@ -62,6 +65,7 @@ instance (Show a, DIM dim) => Show (Stream dim IOFuture a) where
 
 
 data StChunkTestData dim o = StChunkTestData Int (Stream dim IOFuture o) deriving Show
+data StUntilTestData dim o = StUntilTestData Int [o] (Stream dim IOFuture o) deriving Show
 
 instance (NFData o, Arbitrary o, DIM dim, Arbitrary dim) => Arbitrary (StChunkTestData dim o) where
     arbitrary = do
@@ -69,6 +73,27 @@ instance (NFData o, Arbitrary o, DIM dim, Arbitrary dim) => Arbitrary (StChunkTe
         stream <- arbitrary
         return $ StChunkTestData size stream
 
+instance (NFData o, Arbitrary o, DIM dim, Arbitrary dim) => Arbitrary (StUntilTestData dim o) where
+    arbitrary = do
+        dim <- arbitrary
+        list <- arbitrary
+        stopAt <- choose(0, 10)
+        let stg1 = stFromList dim list
+            accFun (acc, _) = acc + 1
+            testFun acc = acc > stopAt
+            stream = stUntil (arr accFun) 0 (arr testFun) stg1
+        return $ StUntilTestData stopAt list stream
+
+
+data NotEqualsException a = NotEqualsException a a deriving (Show, Typeable)
+instance (Typeable a, Show a) => Exception (NotEqualsException a)
+
+checkEquals :: (Eq a, Typeable a, Show a) => a -> a -> IO Bool
+checkEquals expected result = do
+    if (expected == result) then
+        return True
+    else
+        throwIO $ NotEqualsException expected result
 
 propOnIO :: IO Bool -> Property
 propOnIO code = monadicIO $ assert =<< run code
@@ -100,51 +125,57 @@ testWith (name, fun) props = do
 defaultIOEC :: IOEC
 defaultIOEC = IOEC 1000
 
-propExecSkelVsArbFunIsOk :: (Arbitrary i, CoArbitrary i, Arbitrary o, Eq o) => ((i -> o) -> Skel IOFuture i o) -> FunTest i o -> Property
+propExecSkelVsArbFunIsOk :: (Arbitrary i, CoArbitrary i, Arbitrary o, Eq o, Typeable o, Show o) => ((i -> o) -> Skel IOFuture i o) -> FunTest i o -> Property
 propExecSkelVsArbFunIsOk skel (FunTest f is) = propOnIO $ do
     res1 <- mapM (exec defaultIOEC (skel f)) is
     let res2 = map f is
-    return (res1 == res2)
+    checkEquals res1 res2
 
-propExecSkelVsFunIsOk :: (Eq o) => ((i -> o) -> Skel IOFuture i o) -> (i -> o) -> i -> Property
+propExecSkelVsFunIsOk :: (Eq o, Typeable o, Show o) => ((i -> o) -> Skel IOFuture i o) -> (i -> o) -> i -> Property
 propExecSkelVsFunIsOk skel f i = propOnIO $ do
     res1 <- exec defaultIOEC (skel f) i
     let res2 = f i
-    return (res1 == res2)
+    checkEquals res1 res2
 
-propExecArrIsOk :: (Eq o) => (i -> o) -> i -> Property
+propExecArrIsOk :: (Eq o, Typeable o, Show o) => (i -> o) -> i -> Property
 propExecArrIsOk = propExecSkelVsFunIsOk arr
 
-propExecSkSeqIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
+propExecSkSeqIsOk :: (NFData o, Eq o, Typeable o, Show o) => (i -> o) -> i -> Property
 propExecSkSeqIsOk = propExecSkelVsFunIsOk skStrict
 
-propExecSkSynkCompSkForkIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
+propExecSkSynkCompSkForkIsOk :: (NFData o, Eq o, Typeable o, Show o) => (i -> o) -> i -> Property
 propExecSkSynkCompSkForkIsOk = propExecSkelVsFunIsOk (\f -> skSync . skFork f)
 
-propStreamToListDimIsOk :: (Eq i, NFData i, DIM dim) => dim -> [i] -> Property
+propStreamToListDimIsOk :: (Eq i, NFData i, Typeable i, Show i, DIM dim) => dim -> [i] -> Property
 propStreamToListDimIsOk dim list = propOnIO $ do
     let stream = stFromList dim list
     res <- streamToList stream
-    return (list == res)
+    checkEquals list res
 
-propExecStMapIsOk :: (NFData o, Eq o) => (i -> o) -> Stream Z IOFuture i -> Property
+propExecStMapIsOk :: (NFData o, Eq o, Typeable o, Show o) => (i -> o) -> Stream Z IOFuture i -> Property
 propExecStMapIsOk f stream = propOnIO $ do
     list <- streamToList stream
     res1 <- streamToList $ stMap (skStrict f) stream
     let expected = map f list
-    return (res1 == expected)
+    checkEquals res1 expected
 
-propExecStChunkIsOk :: (Eq i, Arbitrary i, DIM dim) => StChunkTestData dim i -> Property
+propExecStChunkIsOk :: (Eq i, Arbitrary i, Typeable i, Show i, DIM dim) => StChunkTestData dim i -> Property
 propExecStChunkIsOk (StChunkTestData size stream) = propOnIO $ do
     expected <- streamToList stream
     result <- streamToList $ stChunk size stream
-    return (expected == result)
+    checkEquals expected result
 
-propExecStUnchunkIsOk :: (Eq i, Arbitrary i, DIM dim) => StChunkTestData dim i -> Property
+propExecStUnchunkIsOk :: (Eq i, Arbitrary i, Typeable i, Show i, DIM dim) => StChunkTestData dim i -> Property
 propExecStUnchunkIsOk (StChunkTestData size stream) = propOnIO $ do
     expected <- streamToList stream
     result <- streamToList $ stUnChunk $ stChunk size stream
-    return (expected == result)
+    checkEquals expected result
+
+propExecStUntilIsOk :: (Typeable i, Show i, Eq i, Arbitrary i, DIM dim, Arbitrary dim) => StUntilTestData dim i -> Property
+propExecStUntilIsOk (StUntilTestData stopAt list stream) = propOnIO $ do
+    let expected = if (stopAt >= length list) then list else take (stopAt+1) list
+    result <- streamToList stream
+    checkEquals expected result
 
 {-- ================================================================ --}
 {-- ================================================================ --}
@@ -192,6 +223,11 @@ testExecStUnchunkIsOk = do
     liftIO $ putStrLn name
     appendResult name =<< (liftIO $ quickCheckResult $ (propExecStUnchunkIsOk :: StChunkTestData Z Int -> Property))
 
+testExecStUntilIsOk :: Results
+testExecStUntilIsOk = do
+    let name = "testExecStUntilIsOk"
+    liftIO $ putStrLn name
+    appendResult name =<< (liftIO $ quickCheckResult $ (propExecStUntilIsOk :: StUntilTestData Z Int -> Property))
 
 {-- ================================================================ --}
 {-- ================================================================ --}
@@ -213,6 +249,7 @@ execAllTests = do
             testExecStMapIsOk
             testExecStChunkIsOk
             testExecStUnchunkIsOk
+            testExecStUntilIsOk
     results <- evalStateT (allTests >> get) []
     let errors = filter (not . isSuccess . snd) results
         cntErr = length errors
