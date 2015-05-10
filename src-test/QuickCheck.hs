@@ -26,8 +26,6 @@ import Prelude hiding ((.))
 
 {-- ================================================================ --}
 {-- ================================================================ --}
-data D dim = D
-
 data FunTest a b = FunTest (a -> b) [a]
 
 instance (Show a, Show b) => Show (FunTest a b) where
@@ -63,9 +61,9 @@ instance (Show a, DIM dim) => Show (Stream dim IOFuture a) where
     show st = show $ unsafePerformIO $ streamToList st
 
 
-data StChunkTestData o = StChunkTestData Int (Stream Z IOFuture o) deriving Show
+data StChunkTestData dim o = StChunkTestData Int (Stream dim IOFuture o) deriving Show
 
-instance (NFData o, Arbitrary o) => Arbitrary (StChunkTestData o) where
+instance (NFData o, Arbitrary o, DIM dim, Arbitrary dim) => Arbitrary (StChunkTestData dim o) where
     arbitrary = do
         size <- choose(1, 5)
         stream <- arbitrary
@@ -123,9 +121,9 @@ propExecSkSeqIsOk = propExecSkelVsFunIsOk skStrict
 propExecSkSynkCompSkForkIsOk :: (NFData o, Eq o) => (i -> o) -> i -> Property
 propExecSkSynkCompSkForkIsOk = propExecSkelVsFunIsOk (\f -> skSync . skFork f)
 
-propStreamToListIsOk :: (Eq i, NFData i) => [i] -> Property
-propStreamToListIsOk list = propOnIO $ do
-    let stream = stFromList Z list
+propStreamToListDimIsOk :: (Eq i, NFData i, DIM dim) => dim -> [i] -> Property
+propStreamToListDimIsOk dim list = propOnIO $ do
+    let stream = stFromList dim list
     res <- streamToList stream
     return (list == res)
 
@@ -136,13 +134,13 @@ propExecStMapIsOk f stream = propOnIO $ do
     let expected = map f list
     return (res1 == expected)
 
-propExecStChunkIsOk :: (Eq i, Arbitrary i) => StChunkTestData i -> Property
+propExecStChunkIsOk :: (Eq i, Arbitrary i, DIM dim) => StChunkTestData dim i -> Property
 propExecStChunkIsOk (StChunkTestData size stream) = propOnIO $ do
     expected <- streamToList stream
     result <- streamToList $ stChunk size stream
     return (expected == result)
 
-propExecStUnchunkIsOk :: (Eq i, Arbitrary i) => StChunkTestData i -> Property
+propExecStUnchunkIsOk :: (Eq i, Arbitrary i, DIM dim) => StChunkTestData dim i -> Property
 propExecStUnchunkIsOk (StChunkTestData size stream) = propOnIO $ do
     expected <- streamToList stream
     result <- streamToList $ stUnChunk $ stChunk size stream
@@ -170,11 +168,11 @@ testWithPlus2 = testWith ("(+2)", ((+ 2) :: Int -> Int)) [
         ("propExecSkSynkCompSkForkIsOk", propExecSkSynkCompSkForkIsOk)
     ]
 
-testExecSkRedIsOk :: Results
-testExecSkRedIsOk = do
-    let name = "testExecSkRedIsOk"
+testExecSkRedIsOk :: (DIM dim, Show dim) => dim -> Results
+testExecSkRedIsOk dim = do
+    let name = "testExecSkRedIsOk-[" ++ show dim ++ "]"
     liftIO $ putStrLn name
-    appendResult name =<< (liftIO $ quickCheckResult $ (propStreamToListIsOk :: [Int] -> Property))
+    appendResult name =<< (liftIO $ quickCheckResult $ (propStreamToListDimIsOk dim :: [Int] -> Property))
 
 testExecStMapIsOk :: Results
 testExecStMapIsOk = do
@@ -186,13 +184,13 @@ testExecStChunkIsOk :: Results
 testExecStChunkIsOk = do
     let name = "testExecStChunkIsOk"
     liftIO $ putStrLn name
-    appendResult name =<< (liftIO $ quickCheckResult $ (propExecStChunkIsOk :: StChunkTestData Int -> Property))
+    appendResult name =<< (liftIO $ quickCheckResult $ (propExecStChunkIsOk :: StChunkTestData Z Int -> Property))
 
 testExecStUnchunkIsOk :: Results
 testExecStUnchunkIsOk = do
     let name = "testExecStUnchunkIsOk"
     liftIO $ putStrLn name
-    appendResult name =<< (liftIO $ quickCheckResult $ (propExecStUnchunkIsOk :: StChunkTestData Int -> Property))
+    appendResult name =<< (liftIO $ quickCheckResult $ (propExecStUnchunkIsOk :: StChunkTestData Z Int -> Property))
 
 
 {-- ================================================================ --}
@@ -209,7 +207,9 @@ execAllTests = do
             testExecSkelVsArbFunIsOk ("skSync . skFork", \f -> skSync . skFork f)
             testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))
             testExecSkelVsArbFunIsOk ("skSync . skFork arr", \f -> skSync . skFork (arr f :: Skel IOFuture Int Int))
-            testExecSkRedIsOk
+            testExecSkRedIsOk Z
+            testExecSkRedIsOk (Z:.(5::Int))
+            testExecSkRedIsOk (Z:.(5::Int):.(3::Int))
             testExecStMapIsOk
             testExecStChunkIsOk
             testExecStUnchunkIsOk
