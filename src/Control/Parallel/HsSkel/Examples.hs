@@ -146,7 +146,7 @@ skKMeansOneStep assignChunk calcMeansChunk = proc (ps, ms, k) -> do
                                (\(d, i) (d', i') -> if (d < d') then (d, i) else (d', i'))
                                (zipWith (\m i -> (dist p m, i)) ms [0 .. ]))
 
-               let res = stParMap (skStrict aux) . stChunk assignChunk . stFromList Z $ ps
+               let res = stParMap (skStrict aux) . stFromList (Z :. assignChunk) $ ps
 
                -- Invierte la lista, pero no es problema
                skRed (arr (\(o, i) -> i : o)) [] -< res
@@ -160,7 +160,7 @@ skKMeansOneStep assignChunk calcMeansChunk = proc (ps, ms, k) -> do
                                    else ((acx, acy), count)
                            in (acx / (fromIntegral cont), acy / (fromIntegral cont))
                -- Usando streams con chunks
-               let res = stParMap (skStrict aux) . stChunk calcMeansChunk . stFromList Z $ [(k - 1), (k - 2) .. 0]
+               let res = stParMap (skStrict aux) . stFromList (Z :. calcMeansChunk) $ [(k - 1), (k - 2) .. 0]
                skRed (arr (\(o, i) -> i : o)) [] -< res
 
 data KMeansStopReason = ByStep | ByThreshold
