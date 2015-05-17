@@ -165,7 +165,7 @@ sumacostosas'' c1 c2 = proc (i1, i2) -> do
     f2 <- SkStrict c2 -< i2
     returnA -< fmap (uncurry (+)) $ fTuple2 (f1, f2)
 
--- sumacostosas usando la mónada Future con fmap, uncurry y fTuple
+-- sumacostosas usando la mónada Future con sequence
 sumacostosas''' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
 sumacostosas''' c1 c2 = proc (i1, i2) -> do
     f1 <- SkStrict c1 -< i1
