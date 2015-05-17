@@ -21,6 +21,10 @@ import Control.Category --(Category, id, (.))
 import Control.DeepSeq --(NFData)
 import Prelude hiding (id, (.)) --(Bool, Either, Int, Maybe(Just, Nothing), ($), Show, Read, Eq, Ord, (*), Monad)
 
+import Control.Applicative
+import Control.Monad
+import qualified Control.Monad as M (sequence)
+
 import Control.Concurrent.MVar
 
 -- Por qué el SkPair no puede generar paralelismo?
@@ -32,11 +36,33 @@ import Control.Concurrent.MVar
 
 data Future i where
     Now :: i -> Future i
-    Later :: (i -> Future o) -> Future i -> Future o
+    Later :: Future i -> (i -> Future o) -> Future o
 
---Later f1 (Later f2 (Later f3 (Now i)))
---Later f4 (Later f5 (Now i))
+fTuple2 :: (Future a, Future b) -> Future (a, b)
+fTuple2 (f1, f2) = do
+    v1 <- f1
+    v2 <- f2
+    return (v1, v2)
 
+instance Functor Future where
+    fmap = liftM
+ 
+instance Applicative Future where
+    pure  = return
+    (<*>) = ap
+
+instance Monad Future where
+    return = Now
+    (>>=) = Later
+
+instance (Num a) => Num (Future a) where
+    (+) f1 f2 = fmap (uncurry (+)) $ fTuple2 (f1, f2)
+    (-) f1 f2 = fmap (uncurry (-)) $ fTuple2 (f1, f2)
+    (*) f1 f2 = fmap (uncurry (*)) $ fTuple2 (f1, f2)
+    negate = (return . negate =<<)
+    abs = (return . abs =<<)
+    signum = (return . signum =<<)
+    fromInteger = Now . fromInteger
 
 data Skel i o where
     SkLazy   :: (i -> o) -> Skel i o
@@ -74,18 +100,18 @@ instance ArrowApply (Skel) where
 
 instance Show (Future i) where
     show (Now _) = "Now"
-    show (Later _ f) = "Later (" ++ show f ++ ")"
+    show (Later f _) = "Later (" ++ show f ++ ")"
 
 instance Show (Skel a b) where
-    show (SkLazy _) = "SkLazy"
-    show (SkComp skel1 skel2) = "SkComp (" ++ show skel1 ++ ") (" ++ show skel2 ++ ")"
-    show (SkPair skel1 skel2) = "SkPair (" ++ show skel1 ++ ") (" ++ show skel2 ++ ")"
-    show (SkChoice skel1 skel2) = "SkChoice (" ++ show skel1 ++ ") (" ++ show skel2 ++ ")"
-    show (SkApply) = "SkApply"
-    show (SkStrict _) = "SkStrict"
-    show (SkAndThen _) = "SkAndThen"
-    show (SkTuple) = "SkTuple"
-    show (SkTraverse) = "SkTraverse"
+    show (SkLazy _) = "<SkLazy/>"
+    show (SkComp skel1 skel2) = "<SkComp> " ++ show skel1 ++ " " ++ show skel2 ++ "</SkComp>"
+    show (SkPair skel1 skel2) = "<SkPair> " ++ show skel1 ++ " " ++ show skel2 ++ "</SkPair>"
+    show (SkChoice skel1 skel2) = "<SkChoice> " ++ show skel1 ++ " " ++ show skel2 ++ "</SkChoice>"
+    show (SkApply) = "<SkApply/>"
+    show (SkStrict _) = "<SkStrict/>"
+    show (SkAndThen _) = "<SkAndThen/>"
+    show (SkTuple) = "<SkTuple/>"
+    show (SkTraverse) = "<SkTraverse/>"
 
 {- ================================================================== -}
 {- ======================= Execution Context ======================== -}
@@ -121,4 +147,37 @@ sumacostosas2 c1 c2 c3 = proc (i1, i2, i3) -> do
     fl <- SkTraverse -< [f1, f2, f3]
     SkAndThen sum -< fl
 
+-- sumacostosas usando la mónada Future
+sumacostosas' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas' c1 c2 = proc (i1, i2) -> do
+    f1 <- SkStrict c1 -< i1
+    f2 <- SkStrict c2 -< i2
+    let fr = do
+        v1 <- f1
+        v2 <- f2
+        return $ v1 + v2
+    returnA -< fr
+
+-- sumacostosas usando la mónada Future con fmap, uncurry y fTuple
+sumacostosas'' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas'' c1 c2 = proc (i1, i2) -> do
+    f1 <- SkStrict c1 -< i1
+    f2 <- SkStrict c2 -< i2
+    returnA -< fmap (uncurry (+)) $ fTuple2 (f1, f2)
+
+-- sumacostosas usando la mónada Future con fmap, uncurry y fTuple
+sumacostosas''' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas''' c1 c2 = proc (i1, i2) -> do
+    f1 <- SkStrict c1 -< i1
+    f2 <- SkStrict c2 -< i2
+    returnA -< do
+        fr <- M.sequence $ [f1, f2]
+        return $ sum fr
+
+-- sumacostosas usando la mónada Future y su instancia de Num
+sumacostosas'''' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas'''' c1 c2 = proc (i1, i2) -> do
+    f1 <- SkStrict c1 -< i1
+    f2 <- SkStrict c2 -< i2
+    returnA -< f1 + f2
 
