@@ -38,11 +38,6 @@ data Future i where
     Now :: i -> Future i
     Later :: Future i -> (i -> Future o) -> Future o
 
-fTuple2 :: (Future a, Future b) -> Future (a, b)
-fTuple2 (f1, f2) = do
-    v1 <- f1
-    v2 <- f2
-    return (v1, v2)
 
 instance Functor Future where
     fmap = liftM
@@ -56,9 +51,9 @@ instance Monad Future where
     (>>=) = Later
 
 instance (Num a) => Num (Future a) where
-    (+) f1 f2 = fmap (uncurry (+)) $ fTuple2 (f1, f2)
-    (-) f1 f2 = fmap (uncurry (-)) $ fTuple2 (f1, f2)
-    (*) f1 f2 = fmap (uncurry (*)) $ fTuple2 (f1, f2)
+    (+) f1 f2 = pure (+) <*> f1 <*> f2
+    (-) f1 f2 = pure (-) <*> f1 <*> f2
+    (*) f1 f2 = pure (*) <*> f1 <*> f2
     negate = (return . negate =<<)
     abs = (return . abs =<<)
     signum = (return . signum =<<)
@@ -147,9 +142,11 @@ sumacostosas2 c1 c2 c3 = proc (i1, i2, i3) -> do
     fl <- SkTraverse -< [f1, f2, f3]
     SkAndThen sum -< fl
 
+
+-- Esto es practicamente Scala
 -- sumacostosas usando la mónada Future
-sumacostosas' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
-sumacostosas' c1 c2 = proc (i1, i2) -> do
+sumacostosas3 :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas3 c1 c2 = proc (i1, i2) -> do
     f1 <- SkStrict c1 -< i1
     f2 <- SkStrict c2 -< i2
     let fr = do
@@ -159,15 +156,15 @@ sumacostosas' c1 c2 = proc (i1, i2) -> do
     returnA -< fr
 
 -- sumacostosas usando la mónada Future con fmap, uncurry y fTuple
-sumacostosas'' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
-sumacostosas'' c1 c2 = proc (i1, i2) -> do
+sumacostosas4 :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas4 c1 c2 = proc (i1, i2) -> do
     f1 <- SkStrict c1 -< i1
     f2 <- SkStrict c2 -< i2
-    returnA -< fmap (uncurry (+)) $ fTuple2 (f1, f2)
+    returnA -< pure (+) <*> f1 <*> f2
 
 -- sumacostosas usando la mónada Future con sequence
-sumacostosas''' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
-sumacostosas''' c1 c2 = proc (i1, i2) -> do
+sumacostosas5 :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas5 c1 c2 = proc (i1, i2) -> do
     f1 <- SkStrict c1 -< i1
     f2 <- SkStrict c2 -< i2
     returnA -< do
@@ -175,8 +172,8 @@ sumacostosas''' c1 c2 = proc (i1, i2) -> do
         return $ sum fr
 
 -- sumacostosas usando la mónada Future y su instancia de Num
-sumacostosas'''' :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
-sumacostosas'''' c1 c2 = proc (i1, i2) -> do
+sumacostosas6 :: (Int -> Int) -> (Int -> Int) -> Skel (Int, Int) (Future Int)
+sumacostosas6 c1 c2 = proc (i1, i2) -> do
     f1 <- SkStrict c1 -< i1
     f2 <- SkStrict c2 -< i2
     returnA -< f1 + f2
