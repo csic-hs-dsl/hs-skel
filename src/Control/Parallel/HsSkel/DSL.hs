@@ -142,19 +142,7 @@ sumacostosas1 c1 c2 = proc (i1, i2) -> do
             v1 <- f1
             v2 <- f2
             return $ v1 + v2
-    id -< fr
-
-
-sumacostosas1 :: (Int -> Int) -> (Int -> Int) -> DSL (Int, Int) (Future Int)
-sumacostosas1 c1 c2 = proc (i1, i2) -> do
-    f1 <- future c1 -< i1
-    f2 <- future c2 -< i2
-    let fr = do 
-            v1 <- f1
-            v2 <- f2
-            return $ v1 + v2
-    id -< fr
-
+    returnA -< fr
 
 sumacostosas2 :: (Int -> Int) -> (Int -> Int) -> DSL (Int, Int) (Future Int)
 sumacostosas2 c1 c2 = proc (i1, i2) -> do
